@@ -4,24 +4,6 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 import os
 
-        # main.py
-from load_data import load_arcan_csvs
-from features_nodes import build_node_features
-from features_smells import build_smell_features
-from merge_features import merge_arcan_features
-
-
-df_nodes,  df_smells = load_arcan_csvs(
-    "data/arcan/nodes.csv",
-    #"data/arcan/edges.csv",
-    "data/arcan/smells.csv"
-)
-
-df_nodes_f = build_node_features(df_nodes, component_type="UNIT")
-#df_edges_f = build_edge_features(df_edges)
-df_smells_f = build_smell_features(df_smells)
-
-arcan_df = merge_arcan_features(df_nodes_f, df_smells_f)
 
 CODE_DIR = "./test"          # cartella contenente i file .java
 OUTPUT_FILE = "dataset_final.csv"
