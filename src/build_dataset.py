@@ -9,7 +9,10 @@ from transformers import AutoTokenizer, AutoModel
 from load_data import load_arcan_csvs
 from features_nodes import build_node_features
 from features_smells import build_smell_features
+from features_edges import build_edge_features
 from merge_features import merge_arcan_features
+from features_edges import build_edge_features
+
 
 # ===================== FUNZIONI CORE =====================
 
@@ -58,7 +61,8 @@ if __name__ == "__main__":
     print("Esecuzione Merge e Feature Engineering...")
     df_nodes_f = build_node_features(df_nodes)
     df_smells_f = build_smell_features(df_smells)
-    df_arcan = merge_arcan_features(df_nodes_f, df_smells_f, df_edges)
+    df_edges_f = build_edge_features(df_edges)
+    df_arcan = merge_arcan_features(df_nodes_f, df_smells_f, df_edges_f)
 
     # --- FILTRO CICLI ---
     smell_type_col = next((c for c in df_arcan.columns if 'smellType' in c), None)
@@ -69,7 +73,7 @@ if __name__ == "__main__":
         print("Nessun ciclo trovato. Fine.")
         exit(0)
 
-    # --- NUOVO: DEDUPLICAZIONE INTELLIGENTE ---
+    # --- DEDUPLICAZIONE INTELLIGENTE ---
     # Uniamo le righe dello stesso file facendo la media delle metriche numeriche
     print(f"Righe prima della deduplicazione: {len(df_arcan)}")
     
@@ -150,4 +154,4 @@ if __name__ == "__main__":
     dataset_final = pd.concat([df_combined, df_pkg_means], axis=1)
     dataset_final.to_csv(args.output, index=False)
     
-    print(f"✅ Operazione completata! Dataset salvato in: {args.output}")
+    print(f"Operazione completata! Dataset salvato in: {args.output}")
