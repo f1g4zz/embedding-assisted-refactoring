@@ -6,12 +6,11 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModel
 
 # Import dai tuoi moduli custom
-from load_data import load_arcan_csvs
-from features_nodes import build_node_features
+from load_data import load_designite_csvs
+from features_methods import build_methods_features
 from features_smells import build_smell_features
-from features_edges import build_edge_features
-from merge_features import merge_arcan_features
-from features_edges import build_edge_features
+from features_classes import build_class_features
+from merge_features import merge_designite_features
 
 
 # ===================== FUNZIONI CORE =====================
@@ -28,17 +27,11 @@ def get_codebert_embedding(code_path, tokenizer, model, device):
     except Exception as e:
         return None
 
-def get_package_name(filepath: str) -> str:
-    """Estrae il percorso della cartella (package) da un file path."""
-    if not isinstance(filepath, str) or filepath in ["", ".", "0", "nan"]:
-        return "unknown"
-    path_parts = filepath.replace("\\", "/").split("/")
-    return "/".join(path_parts[:-1]) if len(path_parts) > 1 else "root"
 
 # ===================== MAIN PIPELINE =====================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pipeline Arcan-CodeBERT Semplificata")
+    parser = argparse.ArgumentParser(description="Pipeline Designite-CodeBERT Semplificata")
     parser.add_argument("--project", type=str, default="openmrs/openmrs-core")
     parser.add_argument("--output", type=str, default="dataset_final.csv")
     args = parser.parse_args()
@@ -46,112 +39,116 @@ if __name__ == "__main__":
     # 1. Configurazione Percorsi
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     PROJECT_ROOT = (BASE_DIR / args.project).resolve()
-    
     print(f"--- Configurazione ---")
     print(f"Root Progetto: {PROJECT_ROOT}")
 
-    # 2. Caricamento e Merge Dati Arcan
-    print("Caricamento CSV Arcan...")
-    comp_p = PROJECT_ROOT / "arcanOutput" / "arcanOutput" / "data" / "component-metrics.csv"
-    smel_p = PROJECT_ROOT / "arcanOutput" / "arcanOutput" / "data" / "smell-characteristics.csv"
-    edge_p = PROJECT_ROOT / "arcanOutput" / "arcanOutput" / "data" / "smell-affects.csv"
+    # 2. Caricamento e Merge Dati Designite
+    print("Caricamento CSV Designite...")
+    method_metrics = BASE_DIR / "analyses" / "MethodMetrics.csv"
+    smells = BASE_DIR / "analyses" / "ImplementationSmells.csv"
+    class_metrics = BASE_DIR / "analyses" / "TypeMetrics.csv"
 
-    df_nodes, df_smells, df_edges = load_arcan_csvs(comp_p, smel_p, edge_p)
+    df_methods, df_smells, df_classes = load_designite_csvs(method_metrics, smells, class_metrics)
     
     print("Esecuzione Merge e Feature Engineering...")
-    df_nodes_f = build_node_features(df_nodes)
+    df_methods_f = build_methods_features(df_methods)
     df_smells_f = build_smell_features(df_smells)
-    df_edges_f = build_edge_features(df_edges)
-    df_arcan = merge_arcan_features(df_nodes_f, df_smells_f, df_edges_f)
+    df_classes_f = build_class_features(df_classes)
+    df_designite = merge_designite_features(df_methods_f, df_smells_f, df_classes_f)
 
-    # --- FILTRO CICLI ---
-    smell_type_col = next((c for c in df_arcan.columns if 'smellType' in c), None)
-    if smell_type_col:
-        df_arcan = df_arcan[df_arcan[smell_type_col].str.contains("cycl", case=False, na=False)].reset_index(drop=True)
-    
-    if len(df_arcan) == 0:
-        print("Nessun ciclo trovato. Fine.")
-        exit(0)
+    # --- FILTRO SMELLTYPE (CORRETTO) ---
+    # Cerchiamo la colonna che si chiama esattamente 'Smell' (case-insensitive)
+    target_col = None
+    for c in df_designite.columns:
+        if c.lower() == 'smell':
+            target_col = c
+            break
 
-    # --- DEDUPLICAZIONE INTELLIGENTE ---
-    # Uniamo le righe dello stesso file facendo la media delle metriche numeriche
-    print(f"Righe prima della deduplicazione: {len(df_arcan)}")
-    
-    numeric_cols = df_arcan.select_dtypes(include=[np.number]).columns.tolist()
-    # Escludiamo eventuali colonne ID che non ha senso mediare
+    if target_col:
+        print(f"Filtraggio sulla colonna: {target_col}")
+        # Rimuoviamo eventuali spazi bianchi e filtriamo per 'Complex Method'
+        df_designite = df_designite[
+            df_designite[target_col].str.strip().str.contains("Complex Method", case=False, na=False)
+        ].reset_index(drop=True)
+        print(f"Righe dopo il filtro 'Complex Method': {len(df_designite)}")
+    else:
+        print("ERRORE: Colonna 'Smell' non trovata nel DataFrame!")
+        print(f"Colonne disponibili: {df_designite.columns.tolist()}")
+        exit(1)
+
+   # --- DEDUPLICAZIONE ---
+    print(f"Righe prima della deduplicazione: {len(df_designite)}")
+    numeric_cols = df_designite.select_dtypes(include=[np.number]).columns.tolist()
     numeric_cols = [c for c in numeric_cols if c.lower() not in ['id', 'graphid', 'fromid', 'toid']]
     
-    # Raggruppiamo per path: media per i numeri, 'first' per il resto (nomi, tipi smell, etc)
-    df_arcan = df_arcan.groupby('filePathRelative', as_index=False).agg({
+    df_designite = df_designite.groupby('File', as_index=False).agg({
         **{col: 'mean' for col in numeric_cols},
-        **{col: 'first' for col in df_arcan.columns if col not in numeric_cols and col != 'filePathRelative'}
+        **{col: 'first' for col in df_designite.columns if col not in numeric_cols and col != 'File'}
     })
-    print(f"Righe uniche post-deduplicazione: {len(df_arcan)}")
+    print(f"Righe uniche post-deduplicazione: {len(df_designite)}")
 
-    # 3. Mappatura File su Disco
-    disk_files = {}
-    print(f"Scansione file Java in corso...")
+    # ===================== 3. SCANSIONE PROGETTO OTTIMIZZATA =====================
+    # Invece di iterare tutto ogni volta, usiamo la fine del path come chiave
+    disk_files_map = {}
+    print(f"Scansione file Java in {PROJECT_ROOT}...")
     for path in PROJECT_ROOT.rglob("*.java"):
-        try:
-            rel_path = path.relative_to(PROJECT_ROOT.parent).as_posix().lower()
-            disk_files[rel_path] = str(path.resolve())
-        except ValueError:
-            continue
-    
-    # 4. Inizializzazione CodeBERT
+        full_path = str(path.resolve())
+        norm_path = full_path.replace("\\", "/").lower()
+        # Salviamo l'ultima parte del path (es: com/user/Main.java)
+        parts = norm_path.split('/')
+        if len(parts) >= 3:
+            key = "/".join(parts[-3:]) # Prende le ultime 3 cartelle + nome file
+            disk_files_map[key] = full_path
+        disk_files_map[norm_path] = full_path # Anche path completo per sicurezza
+
+    # ===================== 4. INIZIALIZZAZIONE CODEBERT =====================
     print("Inizializzazione CodeBERT...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
     model = AutoModel.from_pretrained("microsoft/codebert-base").to(device)
     model.eval()
 
-    # 5. Generazione Embedding File
-    embeddings = []
+    # ===================== 5. GENERAZIONE EMBEDDING =====================
+    all_embeddings = []
     found_count = 0
 
-    print("Generazione embedding...")
-    for _, row in df_arcan.iterrows():
-        raw_path = str(row.get("filePathRelative", "")).replace("\\", "/").lower()
+    print(f"Inizio elaborazione di {len(df_designite)} righe...")
+
+    for idx, row in df_designite.iterrows():
+        raw_path = str(row.get("File", ""))
+        designite_path_norm = raw_path.replace("\\", "/").lower()
         
-        # Protezione contro path invalidi (Package/Root)
-        if raw_path in [".", "", "nan", "0", "none"] or len(raw_path) < 3:
-            embeddings.append(np.zeros(768))
-            continue
+        real_path = None
+        
+        # PROVA 1: Path diretto
+        if Path(raw_path).exists():
+            real_path = raw_path
+        
+        # PROVA 2: Lookup veloce tramite mappa (addio loop for!)
+        else:
+            parts = designite_path_norm.split('/')
+            if len(parts) >= 3:
+                key = "/".join(parts[-3:])
+                real_path = disk_files_map.get(key)
 
-        arcan_path = raw_path[1:] if raw_path.startswith("/") else raw_path
-        real_path = disk_files.get(arcan_path)
-
-        # Fallback contenuto
-        if not real_path and ("/" in arcan_path or ".java" in arcan_path):
-            for rel_key, abs_path in disk_files.items():
-                if arcan_path in rel_key:
-                    real_path = abs_path
-                    break
-
+        # Estrazione
+        emb = None
         if real_path:
             emb = get_codebert_embedding(real_path, tokenizer, model, device)
-            embeddings.append(emb if emb is not None else np.zeros(768))
-            if emb is not None: found_count += 1
+        
+        if emb is not None:
+            all_embeddings.append(emb)
+            found_count += 1
         else:
-            embeddings.append(np.zeros(768))
+            all_embeddings.append(np.zeros(768))
+            # Stampa solo se non lo trova per non intasare la console
+            if idx % 50 == 0: 
+                print(f"[-] Campione non trovato ({idx}): {designite_path_norm}")
 
-    print(f"Embedding completati: {found_count} OK su {len(df_arcan)}")
-
-    # 6. Unione e Calcolo Embedding per Package
-    file_emb_cols = [f"file_emb_{i}" for i in range(768)]
-    df_file_emb = pd.DataFrame(embeddings, columns=file_emb_cols)
-    df_combined = pd.concat([df_arcan.reset_index(drop=True), df_file_emb], axis=1)
-
-    print("Calcolo embedding medi per Package...")
-    df_combined['packageName'] = df_combined['filePathRelative'].apply(get_package_name)
+    # ===================== 6. UNIONE E SALVATAGGIO =====================
+    emb_df = pd.DataFrame(all_embeddings, columns=[f'emb_{i}' for i in range(768)])
+    df_final = pd.concat([df_designite.reset_index(drop=True), emb_df], axis=1)
+    df_final.to_csv(args.output, index=False)
     
-    pkg_emb_cols = [f"pkg_emb_{i}" for i in range(768)]
-    # Usiamo transform mean per assegnare la media del package a ogni riga del file
-    df_pkg_means = df_combined.groupby('packageName')[file_emb_cols].transform('mean')
-    df_pkg_means.columns = pkg_emb_cols
-
-    # 7. Salvataggio Finale
-    dataset_final = pd.concat([df_combined, df_pkg_means], axis=1)
-    dataset_final.to_csv(args.output, index=False)
-    
-    print(f"Operazione completata! Dataset salvato in: {args.output}")
+    print(f"\n--- COMPLETATO ---")
+    print(f"Processati con successo: {found_count}/{len(df_designite)}")

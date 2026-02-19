@@ -1,62 +1,32 @@
 import pandas as pd
+def merge_designite_features(df_methods_f, df_smells_f, df_classes_f):
+    # ... (tua parte di clean_col rimane invariata) ...
 
-def merge_arcan_features(df_nodes_f, df_smells_f, df_edges):
-    # --- 1. NORMALIZZAZIONE TOTALE ---
-    # Forza tutto a stringa, rimuove spazi, rimuove .0
-    def clean(val):
-        return str(val).replace('.0', '').strip()
-
-    # Identifica le colonne ID dinamicamente
-    node_id_col = 'vertexId' if 'vertexId' in df_nodes_f.columns else 'id'
-    smell_id_col = 'vertexId' if 'vertexId' in df_smells_f.columns else 'id'
+    # --- 2. STEP 1: MERGE METODI + SMELLS ---
+    # Invece di on='Method', usiamo le colonne comuni per evitare doppioni di 'File' o 'Class'
+    common_cols_1 = list(set(df_methods_f.columns) & set(df_smells_f.columns))
     
-    # Pulizia
-    df_nodes_f[node_id_col] = df_nodes_f[node_id_col].apply(clean)
-    df_smells_f[smell_id_col] = df_smells_f[smell_id_col].apply(clean)
-    
-    # Identifica colonne edges (fromId/toId)
-    e_from = 'fromId' if 'fromId' in df_edges.columns else 'from'
-    e_to = 'toId' if 'toId' in df_edges.columns else 'to'
-    
-    df_edges[e_from] = df_edges[e_from].apply(clean)
-    df_edges[e_to] = df_edges[e_to].apply(clean)
-
-    # --- 2. MERGE STEP-BY-STEP CON K.O. CHECK ---
-    print(f"Smells pre-merge: {len(df_smells_f)}")
-
-    # Step A: Smell + Edges
-    # Colleghiamo lo smell (fromId) all'arco
-    df_bridge = pd.merge(
+    df_merged_methods = pd.merge(
+        df_methods_f, 
         df_smells_f, 
-        df_edges, 
-        left_on=smell_id_col, 
-        right_on=e_from, 
+        on=common_cols_1, # Usa Method (e File/Class se presenti in entrambi)
         how='inner'
     )
-    print(f"Smell collegati a Edges: {df_bridge[smell_id_col].nunique()}")
-
-    # Step B: Risultato + Nodi
-    # Colleghiamo l'arco (toId) al componente (vertexId)
+    
+    # --- 3. STEP 2: MERGE CON CLASSI ---
+    # Anche qui, usiamo le colonne comuni (sicuramente 'File' e forse 'Class')
+    common_cols_2 = list(set(df_merged_methods.columns) & set(df_classes_f.columns))
+    
     df_final = pd.merge(
-        df_bridge, 
-        df_nodes_f, 
-        left_on=e_to, 
-        right_on=node_id_col, 
-        how='inner', 
-        suffixes=('_smell', '_node')
+        df_merged_methods, 
+        df_classes_f, 
+        on=common_cols_2, 
+        how='inner'
     )
 
-    # --- 3. RECOVERY LOGIC PER CYCLIC HIERARCHY ---
-    # Se mancano smell, usiamo il CentralComponent come ancora di salvataggio
-    mancanti = set(df_smells_f[smell_id_col]) - set(df_final[smell_id_col + '_smell'] if smell_id_col + '_smell' in df_final.columns else [])
+    # --- 4. PULIZIA FINALE (Opzionale) ---
+    # Se dopo i merge hai ancora colonne residue con suffissi (es. LOC_class) 
+    # perché non erano chiavi di merge ma avevano lo stesso nome
+    df_final = df_final.drop_duplicates()
     
-    if mancanti and 'CentralComponent' in df_smells_f.columns:
-        print(f"Tentativo recupero per {len(mancanti)} smell mancanti via CentralComponent...")
-        df_miss = df_smells_f[df_smells_f[smell_id_col].isin(mancanti)]
-        df_rec = pd.merge(df_miss, df_nodes_f, left_on='CentralComponent', right_on='name', how='inner')
-        
-        if not df_rec.empty:
-            df_final = pd.concat([df_final, df_rec], ignore_index=True).drop_duplicates()
-    
-    print(f"Risultato finale: {len(df_final)} righe")
     return df_final
