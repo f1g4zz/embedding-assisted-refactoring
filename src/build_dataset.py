@@ -44,9 +44,9 @@ if __name__ == "__main__":
 
     # 2. Caricamento e Merge Dati Designite
     print("Caricamento CSV Designite...")
-    method_metrics = BASE_DIR / "analyses" / "MethodMetrics.csv"
-    smells = BASE_DIR / "analyses" / "ImplementationSmells.csv"
-    class_metrics = BASE_DIR / "analyses" / "TypeMetrics.csv"
+    method_metrics = PROJECT_ROOT / "MethodMetrics.csv"
+    smells = PROJECT_ROOT / "DesignSmells.csv"
+    class_metrics = PROJECT_ROOT / "TypeMetrics.csv"
 
     df_methods, df_smells, df_classes = load_designite_csvs(method_metrics, smells, class_metrics)
     
@@ -66,27 +66,17 @@ if __name__ == "__main__":
 
     if target_col:
         print(f"Filtraggio sulla colonna: {target_col}")
-        # Rimuoviamo eventuali spazi bianchi e filtriamo per 'Complex Method'
+        # Rimuoviamo eventuali spazi bianchi e filtriamo per 'Feature Envy'
         df_designite = df_designite[
-            df_designite[target_col].str.strip().str.contains("Complex Method", case=False, na=False)
+            df_designite[target_col].str.strip().str.contains("Feature Envy", case=False, na=False)
         ].reset_index(drop=True)
-        print(f"Righe dopo il filtro 'Complex Method': {len(df_designite)}")
+        print(f"Righe dopo il filtro 'Feature Envy': {len(df_designite)}")
     else:
         print("ERRORE: Colonna 'Smell' non trovata nel DataFrame!")
         print(f"Colonne disponibili: {df_designite.columns.tolist()}")
         exit(1)
 
-   # --- DEDUPLICAZIONE ---
-    print(f"Righe prima della deduplicazione: {len(df_designite)}")
-    numeric_cols = df_designite.select_dtypes(include=[np.number]).columns.tolist()
-    numeric_cols = [c for c in numeric_cols if c.lower() not in ['id', 'graphid', 'fromid', 'toid']]
-    
-    df_designite = df_designite.groupby('File', as_index=False).agg({
-        **{col: 'mean' for col in numeric_cols},
-        **{col: 'first' for col in df_designite.columns if col not in numeric_cols and col != 'File'}
-    })
-    print(f"Righe uniche post-deduplicazione: {len(df_designite)}")
-
+   
     # ===================== 3. SCANSIONE PROGETTO OTTIMIZZATA =====================
     # Invece di iterare tutto ogni volta, usiamo la fine del path come chiave
     disk_files_map = {}

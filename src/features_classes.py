@@ -5,7 +5,7 @@ def build_class_features(df_class):
     """
     # 1. Lista esatta delle colonne che vuoi tenere
     target_cols = [
-        "NOF", "NOPF", "NOM", "NOPM", "LOC", 
+        "Class", "NOF", "NOPF", "NOM", "NOPM", "LOC", 
         "WMC", "NC", "DIT", "LCOM", "Fan-In", "Fan-Out", 
         "File", "Line no"
     ]

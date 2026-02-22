@@ -10,7 +10,7 @@ def build_methods_features(df_methods):
     }
     
     # 3. Colonne da tenere: Method + le 3 metriche
-    target_cols = ["Method", "LOC", "CC", "PC"]
+    target_cols = ["Class", "Method", "LOC", "CC", "PC"]
     
     # Selezioniamo solo quelle presenti tra le 4 richieste
     available_cols = [c for c in target_cols if c in df_methods.columns]

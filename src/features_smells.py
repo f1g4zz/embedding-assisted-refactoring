@@ -7,7 +7,7 @@ def build_smell_features(df_smells):
     """
     # 1. Lista esatta delle colonne che vuoi tenere
     target_cols = [
-        "Project","Package","Class","Method","Smell","Description","File"
+        "Project","Package","Class","Smell","Description","File"
     ]
     
     # 2. Pulizia nomi colonne originali (rimuove spazi bianchi tipo "File " -> "File")
