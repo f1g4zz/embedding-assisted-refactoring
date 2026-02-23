@@ -39,6 +39,7 @@ if __name__ == "__main__":
     # 1. Configurazione Percorsi
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     PROJECT_ROOT = (BASE_DIR / args.project).resolve()
+    OUTPUT = (BASE_DIR / args.output).resolve()
     print(f"--- Configurazione ---")
     print(f"Root Progetto: {PROJECT_ROOT}")
 
@@ -75,7 +76,7 @@ if __name__ == "__main__":
         print("ERRORE: Colonna 'Smell' non trovata nel DataFrame!")
         print(f"Colonne disponibili: {df_designite.columns.tolist()}")
         exit(1)
-
+    """
    # --- DEDUPLICAZIONE ---
     print(f"Righe prima della deduplicazione: {len(df_designite)}")
     numeric_cols = df_designite.select_dtypes(include=[np.number]).columns.tolist()
@@ -86,7 +87,7 @@ if __name__ == "__main__":
         **{col: 'first' for col in df_designite.columns if col not in numeric_cols and col != 'File'}
     })
     print(f"Righe uniche post-deduplicazione: {len(df_designite)}")
-
+    """
     # ===================== 3. SCANSIONE PROGETTO OTTIMIZZATA =====================
     # Invece di iterare tutto ogni volta, usiamo la fine del path come chiave
     disk_files_map = {}
@@ -148,7 +149,7 @@ if __name__ == "__main__":
     # ===================== 6. UNIONE E SALVATAGGIO =====================
     emb_df = pd.DataFrame(all_embeddings, columns=[f'emb_{i}' for i in range(768)])
     df_final = pd.concat([df_designite.reset_index(drop=True), emb_df], axis=1)
-    df_final.to_csv(args.output, index=False)
+    df_final.to_csv(OUTPUT, index=False)
     
     print(f"\n--- COMPLETATO ---")
     print(f"Processati con successo: {found_count}/{len(df_designite)}")
