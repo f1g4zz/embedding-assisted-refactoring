@@ -44,9 +44,9 @@ if __name__ == "__main__":
 
     # 2. Caricamento e Merge Dati Designite
     print("Caricamento CSV Designite...")
-    method_metrics = BASE_DIR / "analyses" / "MethodMetrics.csv"
-    smells = BASE_DIR / "analyses" / "ImplementationSmells.csv"
-    class_metrics = BASE_DIR / "analyses" / "TypeMetrics.csv"
+    method_metrics = PROJECT_ROOT / "MethodMetrics.csv"
+    smells = PROJECT_ROOT / "ImplementationSmells.csv"
+    class_metrics = PROJECT_ROOT / "TypeMetrics.csv"
 
     df_methods, df_smells, df_classes = load_designite_csvs(method_metrics, smells, class_metrics)
     
