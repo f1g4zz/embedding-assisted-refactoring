@@ -13,10 +13,9 @@ LABELS = [
 def extract_method_name(row):
     desc = row['desc']
     if pd.isna(desc): return None
-
+    
     # Caso 1: Extract Method - serve il metodo ORIGINALE (quello dopo 'extracted from')
     if "extracted from" in desc:
-        # Cerchiamo la parola prima della parentesi dopo 'extracted from'
         match = re.search(r'extracted from .*?(\w+)\s*\(', desc)
         if match: return match.group(1)
 
@@ -30,68 +29,82 @@ def extract_method_name(row):
     return match.group(1) if match else None
 
 def label_dataset(designite_p, refminer_p, output_p):
-    designite_path = Path(designite_p)
-    refminer_path = Path(refminer_p)
     output_path = Path(output_p)
-
-    df = pd.read_csv(designite_path)
-    ref_df = pd.read_csv(refminer_path)
+    df = pd.read_csv(Path(designite_p))
+    ref_df = pd.read_csv(Path(refminer_p))
 
     for label in LABELS:
         df[label] = 0
 
-    print("Mappatura refactoring...")
+    # Carichiamo i metodi presenti in Designite per un controllo rapido
+    # Creiamo un set di chiavi (classe_minuscola, metodo_minuscolo)
+    designite_keys = set()
+    for _, row in df.iterrows():
+        c = str(row['Class']).split('.')[-1].lower()
+        m = str(row['Method']).split('(')[0].strip().lower()
+        designite_keys.add((c, m))
+
     ref_map = {}
+    skipped_data = [] # Lista per il debug dei metodi skippati
+    
+    print("Mappatura refactoring e analisi discrepanze...")
     for _, row in ref_df.iterrows():
-        method = extract_method_name(row)
-        if method:
-            # Normalizzazione Classe: prendiamo solo l'ultima parte e gestiamo classi interne
-            # Trasformiamo 'Classe.Interna' o 'Classe$Interna' in 'interna'
+        method_name = extract_method_name(row)
+        if method_name:
             cls_full = str(row['class_name']).replace('$', '.')
             cls = cls_full.split('.')[-1].strip().lower()
-            meth = method.strip().lower()
-            
+            meth = method_name.strip().lower()
             key = (cls, meth)
-            if key not in ref_map:
-                ref_map[key] = set()
-            ref_map[key].add(row['refactoring'])
+            
+            if key in designite_keys:
+                if key not in ref_map:
+                    ref_map[key] = set()
+                ref_map[key].add(row['refactoring'])
+            else:
+                # Salviamo i dettagli di ciò che non è stato trovato
+                skipped_data.append({
+                    'class_refminer': row['class_name'],
+                    'method_extracted': method_name,
+                    'refactoring': row['refactoring'],
+                    'description': row['desc']
+                })
 
-    print("Esecuzione Matching...")
     matches_found = 0
     rows_labeled = 0
 
-    def apply_labels(row):
-        nonlocal matches_found, rows_labeled
-        
-        # Pulizia Designite (Metodo è già solo nome, Classe può avere package)
+    # Applicazione etichette sul DataFrame originale
+    for idx, row in df.iterrows():
         d_class = str(row['Class']).replace('$', '.').split('.')[-1].strip().lower()
         d_method = str(row['Method']).split('(')[0].strip().lower()
-        
         key = (d_class, d_method)
         
         if key in ref_map:
             applied_any = False
             for ref_name in ref_map[key]:
                 if ref_name in LABELS:
-                    df.at[row.name, ref_name] = 1
+                    df.at[idx, ref_name] = 1
                     matches_found += 1
                     applied_any = True
             if applied_any:
                 rows_labeled += 1
-        return row
 
-    # Usiamo un ciclo invece di apply per maggiore sicurezza su df.at
-    for i in range(len(df)):
-        apply_labels(df.iloc[i])
-
+    # --- REPORT E SALVATAGGIO ---
     print(f"\n--- REPORT FINALE ---")
-    print(f"Righe Designite caricate: {len(df)}")
-    print(f"Metodi etichettati (righe con almeno un 1): {rows_labeled}")
+    print(f"Metodi univoci in Designite: {len(designite_keys)}")
+    print(f"Metodi di RefMiner TROVATI in Designite: {len(ref_map)}")
+    print(f"Metodi di RefMiner SCARTATI: {len(skipped_data)}")
     print(f"Totale etichette '1' applicate: {matches_found}")
 
+    # Salvataggio file principale
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
-    print(f"File salvato: {output_path}")
+    
+    # Salvataggio file degli scartati per ispezione
+    skipped_file = output_path.parent / "skipped_methods.csv"
+    pd.DataFrame(skipped_data).drop_duplicates().to_csv(skipped_file, index=False)
+    
+    print(f"\n[OK] Dataset etichettato: {output_path}")
+    print(f"[DEBUG] Elenco metodi non trovati salvato in: {skipped_file}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -99,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument('--refminer', required=True)
     parser.add_argument('--out', default='results/dataset_labeled.csv')
     args = parser.parse_args()
-
+    
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     def resolve(p):
         path = Path(p)
