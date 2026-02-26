@@ -1,108 +1,149 @@
 import pandas as pd
-import re
+import json
 import argparse
+import os
 from pathlib import Path
+from collections import Counter
 
-LABELS = [
-    "Extract Method", "Extract And Move Method", "Extract Variable",
-    "Inline Variable", "Split Variable", "Parameterize Variable",
-    "Merge Variable", "Replace Pipeline", "Invert Condition",
-    "Merge Conditional Expresion"
-]
+def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv, output_tracking_csv):
+    if not os.path.exists(designite_csv):
+        print(f"Errore: File Designite non trovato")
+        return
 
-def extract_method_name(row):
-    desc = row['desc']
-    if pd.isna(desc): return None
+    Path(output_matches_csv).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_tracking_csv).parent.mkdir(parents=True, exist_ok=True)
 
-    # Caso 1: Extract Method - serve il metodo ORIGINALE (quello dopo 'extracted from')
-    if "extracted from" in desc:
-        # Cerchiamo la parola prima della parentesi dopo 'extracted from'
-        match = re.search(r'extracted from .*?(\w+)\s*\(', desc)
-        if match: return match.group(1)
+    print(f"--- Caricamento dati Designite ---")
+    df_smells = pd.read_csv(designite_csv)
+    df_smells.columns = df_smells.columns.str.strip()
+    
+    col_map = {}
+    for c in ['Type', 'Type Name', 'Class Name', 'Class']:
+        if c in df_smells.columns: col_map['type'] = c; break
+    for c in ['Code Smell', 'Smell', 'Implementation Smell', 'Design Smell']:
+        if c in df_smells.columns: col_map['smell'] = c; break
 
-    # Caso 2: Invert Condition e altri - spesso il metodo è alla fine dopo 'in method'
-    if "in method" in desc:
-        match = re.search(r'in method .*?(\w+)\s*\(', desc)
-        if match: return match.group(1)
+    # Raggruppiamo gli smell per classe (set per evitare duplicati dello stesso tipo di smell)
+    active_smells_map = {}
+    for _, row in df_smells.iterrows():
+        c_name = str(row[col_map['type']])
+        s_name = str(row.get(col_map.get('smell'), 'N/A'))
+        if c_name not in active_smells_map:
+            active_smells_map[c_name] = set()
+        active_smells_map[c_name].add(s_name)
 
-    # Caso 3: Fallback generale - la parola subito prima della prima parentesi aperta
-    match = re.search(r'(\w+)\s*\(', desc)
-    return match.group(1) if match else None
+    try:
+        with open(ref_miner_json, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+    except Exception as e:
+        print(f"Errore JSON: {e}"); return
 
-def label_dataset(designite_p, refminer_p, output_p):
-    designite_path = Path(designite_p)
-    refminer_path = Path(refminer_p)
-    output_path = Path(output_p)
+    matches = []
+    tracking_history = []
+    
+    # LISTA FILTRATA: Solo refactoring strutturali rilevanti
+    INTERESTING = [
+        "Extract Method",
 
-    df = pd.read_csv(designite_path)
-    ref_df = pd.read_csv(refminer_path)
+        "Extract And Move Method",
 
-    for label in LABELS:
-        df[label] = 0
+        "Extract Variable",
 
-    print("Mappatura refactoring...")
-    ref_map = {}
-    for _, row in ref_df.iterrows():
-        method = extract_method_name(row)
-        if method:
-            # Normalizzazione Classe: prendiamo solo l'ultima parte e gestiamo classi interne
-            # Trasformiamo 'Classe.Interna' o 'Classe$Interna' in 'interna'
-            cls_full = str(row['class_name']).replace('$', '.')
-            cls = cls_full.split('.')[-1].strip().lower()
-            meth = method.strip().lower()
+        "Inline Variable",
+
+        "Split Variable",
+
+        "Parameterize Variable",
+
+        "Merge Variable",
+
+        "Replace Pipeline",
+
+        "Invert Condition",
+
+        "Merge Conditional Expresion"
+    ]
+
+    commits = history.get('commits', [])
+    print(f"--- Analisi su {len(active_smells_map)} classi smelly e {len(commits)} commit ---")
+
+    for commit in commits:
+        sha = commit.get('repository', commit.get('commitId', 'N/A'))
+        
+        for ref in commit.get('refactorings', []):
+            ref_type = ref['type']
             
-            key = (cls, meth)
-            if key not in ref_map:
-                ref_map[key] = set()
-            ref_map[key].add(row['refactoring'])
+            # --- 1. TRACKING RENAME/MOVE ---
+            if ref_type in ["Rename Class", "Move Class"]:
+                left_loc = ref.get('leftSideLocations', [{}])[0]
+                right_loc = ref.get('rightSideLocations', [{}])[0]
+                if 'filePath' in left_loc and 'filePath' in right_loc:
+                    old_path, new_path = left_loc['filePath'], right_loc['filePath']
+                    old_name = old_path.split('/')[-1].replace('.java', '')
+                    new_name = new_path.split('/')[-1].replace('.java', '')
 
-    print("Esecuzione Matching...")
-    matches_found = 0
-    rows_labeled = 0
+                    if old_name in active_smells_map:
+                        active_smells_map[new_name] = active_smells_map.pop(old_name)
+                        tracking_history.append({
+                            'commit': sha, 'type': ref_type,
+                            'old_path': old_path, 'new_path': new_path,
+                            'old_name': old_name, 'new_name': new_name
+                        })
+                        
 
-    def apply_labels(row):
-        nonlocal matches_found, rows_labeled
-        
-        # Pulizia Designite (Metodo è già solo nome, Classe può avere package)
-        d_class = str(row['Class']).replace('$', '.').split('.')[-1].strip().lower()
-        d_method = str(row['Method']).split('(')[0].strip().lower()
-        
-        key = (d_class, d_method)
-        
-        if key in ref_map:
-            applied_any = False
-            for ref_name in ref_map[key]:
-                if ref_name in LABELS:
-                    df.at[row.name, ref_name] = 1
-                    matches_found += 1
-                    applied_any = True
-            if applied_any:
-                rows_labeled += 1
-        return row
+            # --- 2. MATCHING REFACTORING (Solo se in INTERESTING) ---
+            elif ref_type in INTERESTING:
+                involved_files = [loc.get('filePath', '').split('/')[-1].replace('.java', '') 
+                                 for loc in ref.get('leftSideLocations', [])]
+                
+                for class_name in involved_files:
+                    if class_name in active_smells_map:
+                        for s_name in active_smells_map[class_name]:
+                            matches.append({
+                                'commit_sha': sha,
+                                'class_name': class_name,
+                                'refactoring': ref_type,
+                                'smell': s_name,
+                                'desc': ref.get('description', '')
+                            })
+                        # Print di controllo a video (uno per operazione)
+                        
 
-    # Usiamo un ciclo invece di apply per maggiore sicurezza su df.at
-    for i in range(len(df)):
-        apply_labels(df.iloc[i])
+    # --- DEDUPLICAZIONE E STATISTICHE REALI ---
+    df_matches = pd.DataFrame(matches).drop_duplicates()
+    df_tracking = pd.DataFrame(tracking_history).drop_duplicates()
 
-    print(f"\n--- REPORT FINALE ---")
-    print(f"Righe Designite caricate: {len(df)}")
-    print(f"Metodi etichettati (righe con almeno un 1): {rows_labeled}")
-    print(f"Totale etichette '1' applicate: {matches_found}")
+    # Esportazione
+    out_m = output_matches_csv if output_matches_csv.endswith('.csv') else output_matches_csv + ".csv"
+    out_t = output_tracking_csv if output_tracking_csv.endswith('.csv') else output_tracking_csv + ".csv"
+    df_matches.to_csv(out_m, index=False)
+    df_tracking.to_csv(out_t, index=False)
+    
+    # Conteggio basato sul DataFrame finale (reale)
+    final_counts = df_matches['refactoring'].value_counts()
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-    print(f"File salvato: {output_path}")
+    print("\n" + "="*40)
+    print("ANALISI COMPLETATA (Dati Reali)")
+    print(f"Righe totali nel CSV match: {len(df_matches)}")
+    print(f"Spostamenti unici tracciati: {len(df_tracking)}")
+    print("-"*40)
+    print("Conteggio Refactoring (unici per commit/classe/smell):")
+    for ref, count in final_counts.items():
+        print(f" - {ref}: {count}")
+    print("="*40)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--designite', required=True)
     parser.add_argument('--refminer', required=True)
-    parser.add_argument('--out', default='results/dataset_labeled.csv')
+    parser.add_argument('--out_matches', default='results/matches.csv')
+    parser.add_argument('--out_track', default='results/movements.csv')
     args = parser.parse_args()
 
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     def resolve(p):
         path = Path(p)
-        return path if path.is_absolute() else (BASE_DIR / path).resolve()
+        return path if path.is_absolute() else BASE_DIR / path
 
-    label_dataset(resolve(args.designite), resolve(args.refminer), resolve(args.out))
+    analyze_with_live_tracking(str(resolve(args.designite)), str(resolve(args.refminer)), 
+                               str(resolve(args.out_matches)), str(resolve(args.out_track)))
