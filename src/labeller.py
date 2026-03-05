@@ -14,17 +14,17 @@ def extract_method_name(row):
     desc = row['desc']
     if pd.isna(desc): return None
     
-    # Caso 1: Extract Method - serve il metodo ORIGINALE (quello dopo 'extracted from')
+    
     if "extracted from" in desc:
         match = re.search(r'extracted from .*?(\w+)\s*\(', desc)
         if match: return match.group(1)
 
-    # Caso 2: Invert Condition e altri - spesso il metodo è alla fine dopo 'in method'
+    
     if "in method" in desc:
         match = re.search(r'in method .*?(\w+)\s*\(', desc)
         if match: return match.group(1)
 
-    # Caso 3: Fallback generale - la parola subito prima della prima parentesi aperta
+    # Fallback
     match = re.search(r'(\w+)\s*\(', desc)
     return match.group(1) if match else None
 
@@ -36,8 +36,7 @@ def label_dataset(designite_p, refminer_p, output_p):
     for label in LABELS:
         df[label] = 0
 
-    # Carichiamo i metodi presenti in Designite per un controllo rapido
-    # Creiamo un set di chiavi (classe_minuscola, metodo_minuscolo)
+
     designite_keys = set()
     for _, row in df.iterrows():
         c = str(row['Class']).split('.')[-1].lower()
@@ -45,9 +44,9 @@ def label_dataset(designite_p, refminer_p, output_p):
         designite_keys.add((c, m))
 
     ref_map = {}
-    skipped_data = [] # Lista per il debug dei metodi skippati
+    skipped_data = []
     
-    print("Mappatura refactoring e analisi discrepanze...")
+    print("Mapping Refactorings...")
     for _, row in ref_df.iterrows():
         method_name = extract_method_name(row)
         if method_name:
@@ -61,7 +60,7 @@ def label_dataset(designite_p, refminer_p, output_p):
                     ref_map[key] = set()
                 ref_map[key].add(row['refactoring'])
             else:
-                # Salviamo i dettagli di ciò che non è stato trovato
+                
                 skipped_data.append({
                     'class_refminer': row['class_name'],
                     'method_extracted': method_name,
@@ -72,7 +71,7 @@ def label_dataset(designite_p, refminer_p, output_p):
     matches_found = 0
     rows_labeled = 0
 
-    # Applicazione etichette sul DataFrame originale
+    # Labeling
     for idx, row in df.iterrows():
         d_class = str(row['Class']).replace('$', '.').split('.')[-1].strip().lower()
         d_method = str(row['Method']).split('(')[0].strip().lower()
@@ -88,23 +87,21 @@ def label_dataset(designite_p, refminer_p, output_p):
             if applied_any:
                 rows_labeled += 1
 
-    # --- REPORT E SALVATAGGIO ---
-    print(f"\n--- REPORT FINALE ---")
-    print(f"Metodi univoci in Designite: {len(designite_keys)}")
-    print(f"Metodi di RefMiner TROVATI in Designite: {len(ref_map)}")
-    print(f"Metodi di RefMiner SCARTATI: {len(skipped_data)}")
-    print(f"Totale etichette '1' applicate: {matches_found}")
+   
+    print(f"\n--- REPORT ---")
+    print(f"Unique Methods in Designite: {len(designite_keys)}")
+    print(f"RefMiner Methods found in Designite: {len(ref_map)}")
+    print(f"Discarded RefMiner Methods: {len(skipped_data)}")
+    print(f"Total labels '1'applied: {matches_found}")
 
-    # Salvataggio file principale
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
     
-    # Salvataggio file degli scartati per ispezione
     skipped_file = output_path.parent / "skipped_methods.csv"
     pd.DataFrame(skipped_data).drop_duplicates().to_csv(skipped_file, index=False)
     
-    print(f"\n[OK] Dataset etichettato: {output_path}")
-    print(f"[DEBUG] Elenco metodi non trovati salvato in: {skipped_file}")
+    print(f"\n[OK] Dataset labeled: {output_path}")
+    print(f"[DEBUG] list of methods not matched in Designate: {skipped_file}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

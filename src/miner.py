@@ -7,13 +7,13 @@ from collections import Counter
 
 def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv, output_tracking_csv):
     if not os.path.exists(designite_csv):
-        print(f"Errore: File Designite non trovato")
+        print(f"Error: File Designite not Found")
         return
 
     Path(output_matches_csv).parent.mkdir(parents=True, exist_ok=True)
     Path(output_tracking_csv).parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"--- Caricamento dati Designite ---")
+    print(f"--- Loading data from Designite ---")
     df_smells = pd.read_csv(designite_csv)
     df_smells.columns = df_smells.columns.str.strip()
     
@@ -23,7 +23,7 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
     for c in ['Code Smell', 'Smell', 'Implementation Smell', 'Design Smell']:
         if c in df_smells.columns: col_map['smell'] = c; break
 
-    # Raggruppiamo gli smell per classe (set per evitare duplicati dello stesso tipo di smell)
+    # Grouping by class
     active_smells_map = {}
     for _, row in df_smells.iterrows():
         c_name = str(row[col_map['type']])
@@ -36,12 +36,12 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
         with open(ref_miner_json, 'r', encoding='utf-8') as f:
             history = json.load(f)
     except Exception as e:
-        print(f"Errore JSON: {e}"); return
+        print(f"Error JSON: {e}"); return
 
     matches = []
     tracking_history = []
     
-    # LISTA FILTRATA: Solo refactoring strutturali rilevanti
+    # Refactoring list
     INTERESTING = [
         "Extract Method",
 
@@ -73,7 +73,7 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
         for ref in commit.get('refactorings', []):
             ref_type = ref['type']
             
-            # --- 1. TRACKING RENAME/MOVE ---
+            #TRACKING RENAME/MOVE
             if ref_type in ["Rename Class", "Move Class"]:
                 left_loc = ref.get('leftSideLocations', [{}])[0]
                 right_loc = ref.get('rightSideLocations', [{}])[0]
@@ -91,7 +91,7 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
                         })
                         
 
-            # --- 2. MATCHING REFACTORING (Solo se in INTERESTING) ---
+            # MATCHING REFACTORING
             elif ref_type in INTERESTING:
                 involved_files = [loc.get('filePath', '').split('/')[-1].replace('.java', '') 
                                  for loc in ref.get('leftSideLocations', [])]
@@ -106,28 +106,28 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
                                 'smell': s_name,
                                 'desc': ref.get('description', '')
                             })
-                        # Print di controllo a video (uno per operazione)
+                        
                         
 
-    # --- DEDUPLICAZIONE E STATISTICHE REALI ---
+    # Remove duplicates
     df_matches = pd.DataFrame(matches).drop_duplicates()
     df_tracking = pd.DataFrame(tracking_history).drop_duplicates()
 
-    # Esportazione
+    
     out_m = output_matches_csv if output_matches_csv.endswith('.csv') else output_matches_csv + ".csv"
     out_t = output_tracking_csv if output_tracking_csv.endswith('.csv') else output_tracking_csv + ".csv"
     df_matches.to_csv(out_m, index=False)
     df_tracking.to_csv(out_t, index=False)
     
-    # Conteggio basato sul DataFrame finale (reale)
+    # Stats
     final_counts = df_matches['refactoring'].value_counts()
 
     print("\n" + "="*40)
-    print("ANALISI COMPLETATA (Dati Reali)")
-    print(f"Righe totali nel CSV match: {len(df_matches)}")
-    print(f"Spostamenti unici tracciati: {len(df_tracking)}")
+    print("ANALYSIs COMPLETED")
+    print(f"Original rows CSV match: {len(df_matches)}")
+    print(f"Tracked movements: {len(df_tracking)}")
     print("-"*40)
-    print("Conteggio Refactoring (unici per commit/classe/smell):")
+    print("Number of Refactoring:")
     for ref, count in final_counts.items():
         print(f" - {ref}: {count}")
     print("="*40)

@@ -7,19 +7,18 @@ import re
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
-# Import dai tuoi moduli custom
-from load_data import load_designite_csvs
-from features_methods import build_methods_features
-from features_smells import build_smell_features
-from features_classes import build_class_features
-from merge_features import merge_designite_features
+from utils.load_data import load_designite_csvs
+from utils.features_methods import build_methods_features
+from utils.features_smells import build_smell_features
+from utils.features_classes import build_class_features
+from utils.merge_features import merge_designite_features
 
-# ===================== FUNZIONI CORE =====================
+# core functions
 
 def extract_method_by_line(file_path, method_name, line_no):
     """
-    Estrae il codice del metodo partendo dalla riga specifica.
-    Risolve il problema degli overload (stesso nome, riga diversa).
+    Extract methods from files, using the metadata from Designite (Noline),
+    avoids mixing methods with same name since we do not have the complete Method signature
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -73,44 +72,44 @@ if __name__ == "__main__":
     PROJECT_ROOT = (BASE_DIR / args.project).resolve()
     OUTPUT = (BASE_DIR / args.output).resolve()
     
-    print(f"--- Configurazione ---")
-    print(f"Root Progetto: {PROJECT_ROOT}")
+    print(f"--- Configuration in progress ---")
+    print(f"Project Root: {PROJECT_ROOT}")
 
-    # 1. Caricamento e Merge
-    print("Caricamento CSV Designite...")
+    # loading data
+    print("Loading CSV Designite...")
     df_methods, df_smells, df_classes = load_designite_csvs(
         PROJECT_ROOT / "MethodMetrics.csv",
         PROJECT_ROOT / "ImplementationSmells.csv",
         PROJECT_ROOT / "TypeMetrics.csv"
     )
     
-    print("Esecuzione Merge e Feature Engineering...")
+    print("Executing Merge & Feature Engineering...")
     df_methods_f = build_methods_features(df_methods)
     df_smells_f = build_smell_features(df_smells)
     df_classes_f = build_class_features(df_classes)
     df_designite = merge_designite_features(df_methods_f, df_smells_f, df_classes_f)
 
-    # Filtraggio Complex Method
+    # Filter for Complex Method
     target_col = next((c for c in df_designite.columns if c.lower() == 'smell'), None)
     if target_col:
-        print(f"Filtraggio sulla colonna: {target_col}")
+        print(f"Filter on column: {target_col}")
         df_designite = df_designite[
             df_designite[target_col].str.strip().str.contains("Complex Method", case=False, na=False)
         ].reset_index(drop=True)
-        print(f"Righe dopo il filtro 'Complex Method': {len(df_designite)}")
+        print(f"Rows after applying filter 'Complex Method': {len(df_designite)}")
     else:
-        print("ERRORE: Colonna 'Smell' non trovata!"); exit(1)
+        print("ERROR: Column 'Smell' not found!"); exit(1)
 
-    # Identifichiamo la colonna Line No
+    # Identifies where methods are in the files
     line_col = next((c for c in df_designite.columns if c.lower() in ['line no', 'line_no']), 'Line no')
     
-    # Deduplicazione preventiva (File, Method, Line)
-    print(f"Deduplicazione basata su File, Method e {line_col}...")
+    # Deduplication by matching File, Method, Line
+    print(f"Removing duplicates {line_col}...")
     df_designite = df_designite.drop_duplicates(subset=['File', 'Method', line_col]).reset_index(drop=True)
-    print(f"Righe uniche da processare: {len(df_designite)}")
+    print(f"Unique results: {len(df_designite)}")
 
-    # 2. Scansione Progetto
-    print(f"Scansione file Java...")
+    # Scanning project
+    print(f"Scanning Java files...")
     disk_files_map = {}
     for path in PROJECT_ROOT.rglob("*.java"):
         full_path = str(path.resolve())
@@ -121,18 +120,18 @@ if __name__ == "__main__":
         disk_files_map[norm_path] = full_path
         disk_files_map[path.name.lower()] = full_path
 
-    # 3. Inizializzazione CodeBERT
-    print("Inizializzazione CodeBERT...")
+    # CodeBERT Init
+    print("Initializing CodeBERT...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
     model = AutoModel.from_pretrained("microsoft/codebert-base").to(device)
     model.eval()
 
-    # 4. Generazione Embedding
+    # Embedding
     all_embeddings = []
     found_c, found_m = 0, 0
 
-    print(f"Inizio elaborazione di {len(df_designite)} righe...")
+    print(f"Working on {len(df_designite)} rows...")
 
     for idx, row in tqdm(df_designite.iterrows(), total=len(df_designite)):
         raw_path = str(row.get("File", ""))
@@ -161,39 +160,37 @@ if __name__ == "__main__":
                 c_emb = get_codebert_embedding(full_content, tokenizer, model, device)
                 m_code = extract_method_by_line(real_path, method_name, line_no)
                 
-                # --- AGGIUNTA LOG DEBUG ---
+                
                 if m_code:
-                    # Stampa anteprima del codice estratto (prime 100 char)
+                    
                     clean_preview = m_code.replace('\n', ' ')[:100]
-                    #tqdm.write(f"[OK] Metodo: {method_name} (Riga {line_no}) -> Codice: {clean_preview}...")
+                    
                     m_emb = get_codebert_embedding(m_code, tokenizer, model, device)
                     found_m += 1
                 else:
-                    tqdm.write(f"[FALLITO] Metodo non trovato: {method_name} in {real_path} (Riga {line_no})")
-                # --------------------------
+                    tqdm.write(f"[Failure] Method not found: {method_name} in {real_path} (row {line_no})")
+                
                 
             except Exception:
                 pass
 
         all_embeddings.append(np.concatenate([c_emb, m_emb]))
 
-    # 5. Unione e Pulizia Finale Duplicati Embedding
+    # Appending embeddings
     cols = [f'class_emb_{i}' for i in range(768)] + [f'method_emb_{i}' for i in range(768)]
     emb_df = pd.DataFrame(all_embeddings, columns=cols)
     df_final = pd.concat([df_designite.reset_index(drop=True), emb_df], axis=1)
 
-    # --- DROP DUPLICATI BASATO SULL'EMBEDDING DEL METODO ---
-    # Prendiamo le ultime 10 colonne (feature dell'embedding del metodo) per verificare l'identità
+    # Drops all the duplicates that are left
     last_10_cols = cols[-10:]
-    print("Esecuzione drop finale duplicati (stesso embedding metodo)...")
+    print("Removing leftover duplicates...")
     before_drop = len(df_final)
     df_final = df_final.drop_duplicates(subset=last_10_cols).reset_index(drop=True)
     after_drop = len(df_final)
-    print(f"Rimossi {before_drop - after_drop} duplicati tecnici.")
+    print(f"Removed {before_drop - after_drop} duplicates.")
 
-    # 6. Salvataggio
     df_final.to_csv(OUTPUT, index=False)
     
-    print(f"\n--- COMPLETATO ---")
-    print(f"Report: Righe finali {len(df_final)}, Metodi estratti {found_m}")
-    print(f"File salvato in: {OUTPUT}")
+    print(f"\n--- DONE ---")
+    print(f"Report: Rows left {len(df_final)}, Extracted Methods {found_m}")
+    print(f"File saved in: {OUTPUT}")
