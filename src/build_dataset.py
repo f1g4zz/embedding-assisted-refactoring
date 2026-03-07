@@ -24,12 +24,11 @@ def extract_method_by_line(file_path, method_name, line_no):
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         
-        # Le righe nei file partono da 1, Python parte da 0
-        # Prendiamo dalla riga indicata fino alla fine del file
+
         start_idx = max(0, int(line_no) - 1)
         content_from_line = "".join(lines[start_idx:])
         
-        # Regex elastica per trovare l'apertura del metodo
+        
         pattern = re.escape(method_name.strip()) + r"\s{0,}\([^)]{0,}\)\s{0,}(?:throws\s+[\w\s,]+)?\s{0,}\{"
         
         match = re.search(pattern, content_from_line)
