@@ -2,7 +2,6 @@ import pandas as pd
 import argparse
 from pathlib import Path
 
-
 LABELS = [
     "Extract Method", "Extract And Move Method", "Extract Variable",
     "Inline Variable", "Split Variable", "Parameterize Variable",
@@ -14,15 +13,18 @@ def merge_labeled_files(input_dir, output_file):
     input_path = Path(input_dir)
     output_path = Path(output_file)
     
+    # Creiamo il nome per il file degli "scarti" (es: merged_dataset_zeros.csv)
+    output_zeros_path = output_path.parent / f"{output_path.stem}_zeros.csv"
+    
     if not input_path.is_dir():
         print(f"Error: {input_dir} is not a valid directory.")
         return
 
-    all_dataframes = []
+    all_labeled_dfs = []
+    all_zeros_dfs = []
     
-    
-    total_removed = 0
-    total_kept = 0
+    total_zeros = 0
+    total_labeled = 0
     
     csv_files = list(input_path.glob("*.csv"))
     
@@ -43,47 +45,51 @@ def merge_labeled_files(input_dir, output_file):
             print(f"The file {file.name} does not contain the required labels and will be skipped")
             continue
 
-
+        # Maschera: True se almeno una label != 0
         has_labels_mask = (df[LABELS] != 0).any(axis=1)
         
         num_zeros = (~has_labels_mask).sum() 
         num_with_labels = has_labels_mask.sum() 
         
-        total_removed += num_zeros
-        total_kept += num_with_labels
+        total_zeros += num_zeros
+        total_labeled += num_with_labels
         
-        filtered_df = df[has_labels_mask]
+        # Suddividiamo il dataframe
+        labeled_df = df[has_labels_mask]
+        zeros_df = df[~has_labels_mask]
         
-        print(f"File {file.name}: Removed {num_zeros} example where all labels equals 0 {num_with_labels}.")
+        print(f"File {file.name}: Labeled: {num_with_labels} | Zeros: {num_zeros}")
         
-        all_dataframes.append(filtered_df)
+        all_labeled_dfs.append(labeled_df)
+        all_zeros_dfs.append(zeros_df)
 
-    if not all_dataframes:
-        print("No valid data to merge.")
-        return
-
-    final_df = pd.concat(all_dataframes, ignore_index=True)
+    # Salvataggio Dataset "Labeled"
+    if all_labeled_dfs:
+        final_labeled_df = pd.concat(all_labeled_dfs, ignore_index=True)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        final_labeled_df.to_csv(output_path, index=False)
     
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    final_df.to_csv(output_path, index=False)
+    # Salvataggio Dataset "Zeros"
+    if all_zeros_dfs:
+        final_zeros_df = pd.concat(all_zeros_dfs, ignore_index=True)
+        final_zeros_df.to_csv(output_zeros_path, index=False)
     
     print(f"\n" + "="*40)
-    print(f"--- MERGE OP COMPLETED ---")
-    print(f"Total discarded examples (all labels equal to 0): {total_removed}")
-    print(f"Total examples saved:           {total_kept}")
-    print(f"% of mantained examples:      {(total_kept/(total_kept + total_removed)*100):.2f}%")
-    print(f"File created at: {output_path}")
+    print(f"--- MERGE & SPLIT COMPLETED ---")
+    print(f"Total labeled examples (kept):  {total_labeled}")
+    print(f"Total zero examples (moved):    {total_zeros}")
+    print(f"Labeled file created at: {output_path}")
+    print(f"Zeros file created at:   {output_zeros_path}")
     print("="*40)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="CSV Merger: only data with at least a label equaling 0 will be kept.")
+    parser = argparse.ArgumentParser(description="CSV Merger & Splitter: separates samples with labels from those with all zeros.")
     parser.add_argument('--dir', required=True, help='Working directory')
-    parser.add_argument('--out', default='merged_dataset_filtered.csv', help='File Name')
+    parser.add_argument('--out', default='merged_dataset_filtered.csv', help='Main output file name')
     
     args = parser.parse_args()
 
-    # Risoluzione percorsi
+    # Risoluzione percorsi (mantenuta la tua logica originale)
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     
     def resolve(p):
