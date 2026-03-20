@@ -2,7 +2,7 @@ import subprocess
 import os
 import sys
 
-# Project List
+# Projects List
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
     "thredds", "thunderbird-android", "H2-Research", "qpid-jms-amqp-0-x", 
@@ -24,44 +24,45 @@ projects = [
     "jhotdraw", "cuba"
 ]
 
-def run_labeller():
-    # Setup output folder
-    labelled_dir = os.path.join("matches", "filtered", "labelled")
-    
-    if not os.path.exists(labelled_dir):
-        os.makedirs(labelled_dir)
-        print("Folder Created: " + labelled_dir)
+def run_evolution():
+    output_dir = "filtered"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print("Folder '" + output_dir + "' created.")
 
     for project in projects:
         
-        output_file = os.path.join(labelled_dir, "labelled_" + project + "_filtered.csv")
+        output_file = os.path.join(output_dir, project + "_filtered.csv")
 
         # Skip if file already exists
         if os.path.exists(output_file):
-            print(">>> Progetto " + project + " already labeled. Skipping.")
+            print(">>> Project " + project + " already filtered. Skipping.")
             continue
 
-        print("--- Labelling : " + project + " ---")
+        print("--- Evolution: " + project + " ---")
         
-        designite_input = "analyses\\after\\" + project + "_after\\complex_methods_" + project + "_after.csv"
-        matches_input = "matches\\filtered\\matches\\matches_" + project + "_filtered.csv"
+        before = "analyses\\" + project + "\\complex_methods_" + project + ".csv"
+        after = "analyses\\after\\" + project + "_after\\complex_methods_" + project + "_after.csv"
+        refminer = "mined_projects\\" + project + ".json"
 
         command = [
-            sys.executable, "labeller.py",
-            "--designite", designite_input,
-            "--refminer", matches_input,
-            "--out", output_file
+            sys.executable, "evolution.py",
+            "--before", before,
+            "--after", after,
+            "--refminer", refminer,
+            "--output", output_file
         ]
 
         try:
+        
             subprocess.check_call(command)
-            print("OK: Labelling completed per " + project)
+            print("OK: " + project + " completato.")
         except subprocess.CalledProcessError:
-            print("ERROR: labeller.py failed on " + project)
+            print("ERRORE: evolution.py ha fallito per " + project)
         except Exception as e:
-            print("ERROR " + project + ": " + str(e))
+            print("ERROR" + project + ": " + str(e))
         
         print("-" * 40)
 
 if __name__ == "__main__":
-    run_labeller()
+    run_evolution()

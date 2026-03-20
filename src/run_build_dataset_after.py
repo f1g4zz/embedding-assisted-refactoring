@@ -2,7 +2,10 @@ import subprocess
 import os
 import sys
 
-# Project List
+SRC_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\project_thesis\src"
+
+ANALYSES_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\analyses"
+
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
     "thredds", "thunderbird-android", "H2-Research", "qpid-jms-amqp-0-x", 
@@ -24,44 +27,49 @@ projects = [
     "jhotdraw", "cuba"
 ]
 
-def run_labeller():
-    # Setup output folder
-    labelled_dir = os.path.join("matches", "filtered", "labelled")
+def run_build_dataset_after():
+    script_path = os.path.join(SRC_PATH, "build_dataset.py")
+    base_after_dir = os.path.join(ANALYSES_PATH, "after")
     
-    if not os.path.exists(labelled_dir):
-        os.makedirs(labelled_dir)
-        print("Folder Created: " + labelled_dir)
+    if not os.path.exists(base_after_dir):
+        os.makedirs(base_after_dir)
+        print("Created directory: " + base_after_dir)
 
     for project in projects:
-        
-        output_file = os.path.join(labelled_dir, "labelled_" + project + "_filtered.csv")
+        project_after_dir = os.path.join(base_after_dir, project + "_after")
+        if not os.path.exists(project_after_dir):
+            os.makedirs(project_after_dir)
 
-        # Skip if file already exists
+        output_file = os.path.join(project_after_dir, "complex_methods_" + project + "_after.csv")
+
         if os.path.exists(output_file):
-            print(">>> Progetto " + project + " already labeled. Skipping.")
+            print(">>> Project " + project + " (after) already exists. Skipping.")
             continue
 
-        print("--- Labelling : " + project + " ---")
+        print("--- Building Dataset (After): " + project + " ---")
         
-        designite_input = "analyses\\after\\" + project + "_after\\complex_methods_" + project + "_after.csv"
-        matches_input = "matches\\filtered\\matches\\matches_" + project + "_filtered.csv"
+        project_path = os.path.join(ANALYSES_PATH, project)
+
+        if not os.path.exists(project_path):
+            print(">>> ERROR: Source folder not found for " + project)
+            print("    Path checked: " + project_path)
+            continue
 
         command = [
-            sys.executable, "labeller.py",
-            "--designite", designite_input,
-            "--refminer", matches_input,
-            "--out", output_file
+            sys.executable, script_path,
+            "--project", project_path,
+            "--output", output_file
         ]
 
         try:
             subprocess.check_call(command)
-            print("OK: Labelling completed per " + project)
+            print("OK: Dataset built for " + project)
         except subprocess.CalledProcessError:
-            print("ERROR: labeller.py failed on " + project)
+            print("ERROR: build_dataset.py failed for " + project)
         except Exception as e:
-            print("ERROR " + project + ": " + str(e))
+            print("ERROR on " + project + ": " + str(e))
         
         print("-" * 40)
 
 if __name__ == "__main__":
-    run_labeller()
+    run_build_dataset_after()

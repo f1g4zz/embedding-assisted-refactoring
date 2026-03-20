@@ -88,14 +88,29 @@ if __name__ == "__main__":
     df_classes_f = build_class_features(df_classes)
     df_designite = merge_designite_features(df_methods_f, df_smells_f, df_classes_f)
 
-    # Filter for Complex Method
+    INTERESTING_SMELLS = [
+    "Complex Method", 
+    "Long Method", 
+    "Feature Envy", 
+    "Long Parameter List", 
+    "Uncommunicative Name", 
+    "Complex Conditional", 
+    "Brain Method",
+    "Magic Number",
+    "Long Identifier",
+    "Duplicate Code",
+    "Deep Inheritance" # Opzionale: se ti interessano Pull Up/Push Down Method
+    ]
+
     target_col = next((c for c in df_designite.columns if c.lower() == 'smell'), None)
+
     if target_col:
-        print(f"Filter on column: {target_col}")
-        df_designite = df_designite[
-            df_designite[target_col].str.strip().str.contains("Complex Method", case=False, na=False)
-        ].reset_index(drop=True)
-        print(f"Rows after applying filter 'Complex Method': {len(df_designite)}")
+        print(f"Filtering smells from Designite in column: {target_col}")
+        mask = df_designite[target_col].str.strip().isin(INTERESTING_SMELLS)
+        df_designite = df_designite[mask].reset_index(drop=True)
+        
+        print(f"Rows remaining after filtering: {len(df_designite)}")
+        print(f"Smells found: {df_designite[target_col].unique()}")
     else:
         print("ERROR: Column 'Smell' not found!"); exit(1)
 

@@ -44,24 +44,18 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
     # Refactoring list
     INTERESTING = [
         "Extract Method",
-
         "Extract And Move Method",
-
+        "Inline Method",
+        "Move Method",
+        "Pull Up Method",
+        "Push Down Method",
+        "Rename Method",
         "Extract Variable",
-
         "Inline Variable",
-
-        "Split Variable",
-
         "Parameterize Variable",
-
-        "Merge Variable",
-
-        "Replace Pipeline",
-
-        "Invert Condition",
-
-        "Merge Conditional Expresion"
+        "Rename Parameter",
+        "Rename Variable",
+        "Replace Variable with Attribute"
     ]
 
     commits = history.get('commits', [])

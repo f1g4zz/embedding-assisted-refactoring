@@ -2,7 +2,12 @@ import subprocess
 import os
 import sys
 
-# Project List
+JAR_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\ck\ck\target\ck-0.7.1-SNAPSHOT-jar-with-dependencies.jar"
+
+PROJECTS_ROOT = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\projects"
+
+RESULTS_ROOT = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\ck_analysis"
+
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
     "thredds", "thunderbird-android", "H2-Research", "qpid-jms-amqp-0-x", 
@@ -24,44 +29,50 @@ projects = [
     "jhotdraw", "cuba"
 ]
 
-def run_labeller():
-    # Setup output folder
-    labelled_dir = os.path.join("matches", "filtered", "labelled")
-    
-    if not os.path.exists(labelled_dir):
-        os.makedirs(labelled_dir)
-        print("Folder Created: " + labelled_dir)
+def run_ck_analysis():
+    if not os.path.exists(JAR_PATH):
+        print("ERROR: JAR not found: " + JAR_PATH)
+        return
 
     for project in projects:
-        
-        output_file = os.path.join(labelled_dir, "labelled_" + project + "_filtered.csv")
 
-        # Skip if file already exists
-        if os.path.exists(output_file):
-            print(">>> Progetto " + project + " already labeled. Skipping.")
+        project_path = os.path.join(PROJECTS_ROOT, project, project)
+        
+        project_results_dir = os.path.join(RESULTS_ROOT, project)
+
+        check_file = os.path.join(project_results_dir, "class.csv")
+
+        if os.path.exists(check_file):
+            print(">>> Progetto " + project + " already done. Skipping.")
             continue
 
-        print("--- Labelling : " + project + " ---")
-        
-        designite_input = "analyses\\after\\" + project + "_after\\complex_methods_" + project + "_after.csv"
-        matches_input = "matches\\filtered\\matches\\matches_" + project + "_filtered.csv"
+        if not os.path.exists(project_results_dir):
+            os.makedirs(project_results_dir)
+            print("Folder Created: " + project_results_dir)
+
+        print("--- Running CK Analysis: " + project + " ---")
+
+        if not os.path.exists(project_path):
+            print(">>> ERROR: Sorurce not found " + project_path)
+            continue
+
 
         command = [
-            sys.executable, "labeller.py",
-            "--designite", designite_input,
-            "--refminer", matches_input,
-            "--out", output_file
+            "java", "-jar", JAR_PATH,
+            project_path,
+            "true", "0", "true",
+            project_results_dir + os.sep 
         ]
 
         try:
             subprocess.check_call(command)
-            print("OK: Labelling completed per " + project)
+            print("OK: Analysis completed " + project)
         except subprocess.CalledProcessError:
-            print("ERROR: labeller.py failed on " + project)
+            print("ERROR: CK has failed for " + project)
         except Exception as e:
             print("ERROR " + project + ": " + str(e))
         
         print("-" * 40)
 
 if __name__ == "__main__":
-    run_labeller()
+    run_ck_analysis()

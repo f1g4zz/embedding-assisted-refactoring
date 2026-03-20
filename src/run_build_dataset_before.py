@@ -2,7 +2,12 @@ import subprocess
 import os
 import sys
 
-# Lista completa dei progetti
+
+BASE_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\project_thesis\src"
+
+
+ANALYSES_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\analyses"
+
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
     "thredds", "thunderbird-android", "H2-Research", "qpid-jms-amqp-0-x", 
@@ -24,48 +29,40 @@ projects = [
     "jhotdraw", "cuba"
 ]
 
-def run_evolution():
-    # Assicurati che la cartella di output esista
-    output_dir = "filtered"
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        print("Cartella '" + output_dir + "' creata.")
+def run_build_before():
+    script_path = os.path.join(BASE_PATH, "build_dataset.py")
 
     for project in projects:
-        # Percorso del file di output per il controllo
-        output_file = os.path.join(output_dir, project + "_filtered.csv")
-
-        # Se il file esiste gia', saltiamo per risparmiare tempo
-        if os.path.exists(output_file):
-            print(">>> Progetto " + project + " gia' filtrato. Salto.")
+        project_dir = os.path.join(ANALYSES_PATH, project)
+        
+        if not os.path.exists(project_dir):
+            print(">>> Folder not found for " + project + ". Skipping.")
+            print("    Path checked: " + project_dir)
             continue
 
-        print("--- Elaborazione Evolution: " + project + " ---")
-        
-        # Costruzione dei percorsi (Compatibile Python 2)
-        before = "analyses\\" + project + "\\complex_methods_" + project + ".csv"
-        after = "analyses\\after\\" + project + "_after\\complex_methods_" + project + "_after.csv"
-        refminer = "mined_projects\\" + project + ".json"
+        output_file = os.path.join(project_dir, "complex_methods_" + project + ".csv")
 
-        # Comando con sys.executable per mantenere il venv
+        if os.path.exists(output_file):
+            print(">>> Project " + project + " already done. Skipping.")
+            continue
+
+        print("--- Building Dataset (Before): " + project + " ---")
+        
         command = [
-            sys.executable, "evolution.py",
-            "--before", before,
-            "--after", after,
-            "--refminer", refminer,
+            sys.executable, script_path,
+            "--project", project_dir,
             "--output", output_file
         ]
 
         try:
-            # check_call e' preferibile in Python 2.x
             subprocess.check_call(command)
-            print("OK: " + project + " completato.")
+            print("OK: Dataset built for " + project)
         except subprocess.CalledProcessError:
-            print("ERRORE: evolution.py ha fallito per " + project)
+            print("ERROR: build_dataset.py failed for " + project)
         except Exception as e:
-            print("ERRORE IMPREVISTO su " + project + ": " + str(e))
+            print("ERROR on " + project + ": " + str(e))
         
         print("-" * 40)
 
 if __name__ == "__main__":
-    run_evolution()
+    run_build_before()

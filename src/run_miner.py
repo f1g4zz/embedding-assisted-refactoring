@@ -2,7 +2,7 @@ import subprocess
 import os
 import sys
 
-# Lista completa dei progetti
+# Project List
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
     "thredds", "thunderbird-android", "H2-Research", "qpid-jms-amqp-0-x", 
@@ -25,33 +25,28 @@ projects = [
 ]
 
 def run_miner():
-    # Definiamo le cartelle di output
     matches_dir = os.path.join("matches", "filtered", "matches")
     movements_dir = os.path.join("matches", "filtered", "movements")
     
-    # Creazione cartelle (compatibile Python 2.x)
     for folder in [matches_dir, movements_dir]:
         if not os.path.exists(folder):
             os.makedirs(folder)
             print("Creata cartella: " + folder)
 
     for project in projects:
-        # Costruiamo i nomi dei file di output per il controllo
         out_matches = os.path.join(matches_dir, "matches_" + project + "_filtered.csv")
         out_track = os.path.join(movements_dir, "movements_" + project + "_filtered.csv")
 
-        # Se il file esiste gia', saltiamo il progetto (permette di riprendere da dove si e' interrotto)
+        # Skip if file already exists
         if os.path.exists(out_matches):
-            print(">>> Progetto " + project + " gia' elaborato. Salto.")
+            print(">>> Project " + project + " already exists. Skipping.")
             continue
 
-        print("--- Inizio Mining: " + project + " ---")
+        print("--- Mining: " + project + " ---")
         
-        # Percorsi input
         designite_input = "filtered\\" + project + "_filtered.csv"
         refminer_input = "mined_projects\\" + project + ".json"
 
-        # Comando: sys.executable assicura l'uso del Python del venv attivo
         command = [
             sys.executable, "miner.py",
             "--designite", designite_input,
@@ -61,22 +56,20 @@ def run_miner():
         ]
 
         try:
-            # Eseguiamo il comando e mostriamo l'output in tempo reale
             subprocess.check_call(command)
-            print("OK: " + project + " completato correttamente.")
+            print("OK: " + project + " succesfully completed.")
         except subprocess.CalledProcessError as e:
-            print("ERRORE: miner.py ha fallito per il progetto " + project)
+            print("ERRORE: miner.py failed on " + project)
         except Exception as e:
-            print("ERRORE IMPREVISTO su " + project + ": " + str(e))
+            print("ERROR " + project + ": " + str(e))
         
         print("-" * 40)
 
 if __name__ == "__main__":
-    # Verifica preliminare di pandas nello script principale
     try:
         import pandas
-        print("Ambiente OK: Pandas trovato (v" + str(pandas.__version__) + ")")
+        print("Ambient OK: Pandas found (v" + str(pandas.__version__) + ")")
         run_miner()
     except ImportError:
-        print("ERRORE CRITICO: Pandas non trovato nell'ambiente attivo.")
-        print("Prova a eseguire: " + sys.executable + " -m pip install pandas")
+        print("ERROR: Pandas not found.")
+        print("tryin to execute: " + sys.executable + " -m pip install pandas")
