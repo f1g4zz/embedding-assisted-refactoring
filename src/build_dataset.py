@@ -4,6 +4,8 @@ import pandas as pd
 import torch
 import numpy as np
 import re
+import os
+import sys
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
@@ -13,21 +15,18 @@ from utils.features_smells import build_smell_features
 from utils.features_classes import build_class_features
 from utils.merge_features import merge_designite_features
 
-# core functions
+# ===================== CORE FUNCTIONS =====================
 
 def extract_method_by_line(file_path, method_name, line_no):
     """
-    Extract methods from files, using the metadata from Designite (Noline),
-    avoids mixing methods with same name since we do not have the complete Method signature
+    Extract methods from files using Designite metadata (Line no).
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         
-
         start_idx = max(0, int(line_no) - 1)
         content_from_line = "".join(lines[start_idx:])
-        
         
         pattern = re.escape(method_name.strip()) + r"\s{0,}\([^)]{0,}\)\s{0,}(?:throws\s+[\w\s,]+)?\s{0,}\{"
         
@@ -63,18 +62,21 @@ def get_codebert_embedding(text, tokenizer, model, device):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pipeline Designite-CodeBERT con Line Mapping")
-    parser.add_argument("--project", type=str, default="openmrs/openmrs-core")
-    parser.add_argument("--output", type=str, default="dataset_final.csv")
+    parser.add_argument("--project", type=str, required=True, help="Percorso del progetto")
+    parser.add_argument("--output", type=str, required=True, help="Percorso del file CSV di output")
+    parser.add_argument("--no-embeddings", action="store_true", help="Salta la generazione degli embedding CodeBERT")
     args = parser.parse_args()
 
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
-    PROJECT_ROOT = (BASE_DIR / args.project).resolve()
-    OUTPUT = (BASE_DIR / args.output).resolve()
     
-    print(f"--- Configuration in progress ---")
-    print(f"Project Root: {PROJECT_ROOT}")
+    PROJECT_ROOT = Path(args.project).resolve() if os.path.isabs(args.project) else (BASE_DIR / args.project).resolve()
+    OUTPUT = Path(args.output).resolve() if os.path.isabs(args.output) else (BASE_DIR / args.output).resolve()
+    
+    print("--- Configuration ---")
+    print("Project Root: " + str(PROJECT_ROOT))
+    print("Output File: " + str(OUTPUT))
 
-    # loading data
+    # Loading data
     print("Loading CSV Designite...")
     df_methods, df_smells, df_classes = load_designite_csvs(
         PROJECT_ROOT / "MethodMetrics.csv",
@@ -89,122 +91,96 @@ if __name__ == "__main__":
     df_designite = merge_designite_features(df_methods_f, df_smells_f, df_classes_f)
 
     INTERESTING_SMELLS = [
-    "Complex Method", 
-    "Long Method", 
-    "Feature Envy", 
-    "Long Parameter List", 
-    "Uncommunicative Name", 
-    "Complex Conditional", 
-    "Brain Method",
-    "Magic Number",
-    "Long Identifier",
-    "Duplicate Code",
-    "Deep Inheritance" # Opzionale: se ti interessano Pull Up/Push Down Method
+        "Complex Method", "Long Method", "Feature Envy", "Long Parameter List", 
+        "Uncommunicative Name", "Complex Conditional", "Brain Method",
+        "Magic Number", "Long Identifier", "Duplicate Code", "Deep Inheritance"
     ]
 
     target_col = next((c for c in df_designite.columns if c.lower() == 'smell'), None)
 
     if target_col:
-        print(f"Filtering smells from Designite in column: {target_col}")
         mask = df_designite[target_col].str.strip().isin(INTERESTING_SMELLS)
         df_designite = df_designite[mask].reset_index(drop=True)
-        
-        print(f"Rows remaining after filtering: {len(df_designite)}")
-        print(f"Smells found: {df_designite[target_col].unique()}")
+        print("Rows after smell filtering: " + str(len(df_designite)))
     else:
-        print("ERROR: Column 'Smell' not found!"); exit(1)
+        print("ERROR: Column 'Smell' not found!"); sys.exit(1)
 
-    # Identifies where methods are in the files
     line_col = next((c for c in df_designite.columns if c.lower() in ['line no', 'line_no']), 'Line no')
     
-    # Deduplication by matching File, Method, Line
-    print(f"Removing duplicates {line_col}...")
+    print("Removing duplicates based on File, Method, " + line_col + "...")
     df_designite = df_designite.drop_duplicates(subset=['File', 'Method', line_col]).reset_index(drop=True)
-    print(f"Unique results: {len(df_designite)}")
 
-    # Scanning project
-    print(f"Scanning Java files...")
-    disk_files_map = {}
-    for path in PROJECT_ROOT.rglob("*.java"):
-        full_path = str(path.resolve())
-        norm_path = full_path.replace("\\", "/").lower()
-        parts = norm_path.split('/')
-        if len(parts) >= 3:
-            disk_files_map["/".join(parts[-3:])] = full_path
-        disk_files_map[norm_path] = full_path
-        disk_files_map[path.name.lower()] = full_path
+    if not args.no_embeddings:
+        print("Scanning Java files for embeddings...")
+        disk_files_map = {}
+        for path in PROJECT_ROOT.rglob("*.java"):
+            full_path = str(path.resolve())
+            norm_path = full_path.replace("\\", "/").lower()
+            parts = norm_path.split('/')
+            if len(parts) >= 3:
+                disk_files_map["/".join(parts[-3:])] = full_path
+            disk_files_map[norm_path] = full_path
+            disk_files_map[path.name.lower()] = full_path
 
-    # CodeBERT Init
-    print("Initializing CodeBERT...")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
-    model = AutoModel.from_pretrained("microsoft/codebert-base").to(device)
-    model.eval()
+        print("Initializing CodeBERT...")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
+        model = AutoModel.from_pretrained("microsoft/codebert-base").to(device)
+        model.eval()
 
-    # Embedding
-    all_embeddings = []
-    found_c, found_m = 0, 0
+        all_embeddings = []
+        found_m = 0
 
-    print(f"Working on {len(df_designite)} rows...")
+        print("Working on " + str(len(df_designite)) + " rows...")
+        for idx, row in tqdm(df_designite.iterrows(), total=len(df_designite)):
+            raw_path = str(row.get("File", ""))
+            method_name = str(row.get("Method", ""))
+            line_no = row.get(line_col) or 0
+            
+            path_norm = raw_path.replace("\\", "/").lower()
+            real_path = None
+            parts = path_norm.split('/')
+            key_3 = "/".join(parts[-3:]) if len(parts) >= 3 else "none"
+            
+            if Path(raw_path).exists(): real_path = raw_path
+            elif key_3 in disk_files_map: real_path = disk_files_map[key_3]
+            elif path_norm in disk_files_map: real_path = disk_files_map[path_norm]
+            elif Path(path_norm).name in disk_files_map: real_path = disk_files_map[Path(path_norm).name]
 
-    for idx, row in tqdm(df_designite.iterrows(), total=len(df_designite)):
-        raw_path = str(row.get("File", ""))
-        method_name = str(row.get("Method", ""))
-        line_no = row.get(line_col) or 0
-        
-        path_norm = raw_path.replace("\\", "/").lower()
-        real_path = None
-        parts = path_norm.split('/')
-        key_3 = "/".join(parts[-3:]) if len(parts) >= 3 else "none"
-        
-        if Path(raw_path).exists(): real_path = raw_path
-        elif key_3 in disk_files_map: real_path = disk_files_map[key_3]
-        elif path_norm in disk_files_map: real_path = disk_files_map[path_norm]
-        elif Path(path_norm).name in disk_files_map: real_path = disk_files_map[Path(path_norm).name]
+            c_emb = np.zeros(768)
+            m_emb = np.zeros(768)
 
-        c_emb = np.zeros(768)
-        m_emb = np.zeros(768)
-
-        if real_path:
-            found_c += 1
-            try:
-                with open(real_path, "r", encoding="utf-8") as f:
-                    full_content = f.read()
-                
-                c_emb = get_codebert_embedding(full_content, tokenizer, model, device)
-                m_code = extract_method_by_line(real_path, method_name, line_no)
-                
-                
-                if m_code:
+            if real_path:
+                try:
+                    with open(real_path, "r", encoding="utf-8") as f:
+                        full_content = f.read()
                     
-                    clean_preview = m_code.replace('\n', ' ')[:100]
+                    c_emb = get_codebert_embedding(full_content, tokenizer, model, device)
+                    m_code = extract_method_by_line(real_path, method_name, line_no)
                     
-                    m_emb = get_codebert_embedding(m_code, tokenizer, model, device)
-                    found_m += 1
-                else:
-                    tqdm.write(f"[Failure] Method not found: {method_name} in {real_path} (row {line_no})")
-                
-                
-            except Exception:
-                pass
+                    if m_code:
+                        m_emb = get_codebert_embedding(m_code, tokenizer, model, device)
+                        found_m += 1
+                except Exception:
+                    pass
 
-        all_embeddings.append(np.concatenate([c_emb, m_emb]))
+            all_embeddings.append(np.concatenate([c_emb, m_emb]))
 
-    # Appending embeddings
-    cols = [f'class_emb_{i}' for i in range(768)] + [f'method_emb_{i}' for i in range(768)]
-    emb_df = pd.DataFrame(all_embeddings, columns=cols)
-    df_final = pd.concat([df_designite.reset_index(drop=True), emb_df], axis=1)
-
-    # Drops all the duplicates that are left
-    last_10_cols = cols[-10:]
-    print("Removing leftover duplicates...")
-    before_drop = len(df_final)
-    df_final = df_final.drop_duplicates(subset=last_10_cols).reset_index(drop=True)
-    after_drop = len(df_final)
-    print(f"Removed {before_drop - after_drop} duplicates.")
+        cols = [f'class_emb_{i}' for i in range(768)] + [f'method_emb_{i}' for i in range(768)]
+        emb_df = pd.DataFrame(all_embeddings, columns=cols)
+        df_final = pd.concat([df_designite.reset_index(drop=True), emb_df], axis=1)
+        
+        print("Removing leftover duplicates using embedding values...")
+        last_10_cols = cols[-10:]
+        df_final = df_final.drop_duplicates(subset=last_10_cols).reset_index(drop=True)
+    else:
+        print("Skipping CodeBERT embeddings stage.")
+        df_final = df_designite
+        found_m = 0
 
     df_final.to_csv(OUTPUT, index=False)
     
-    print(f"\n--- DONE ---")
-    print(f"Report: Rows left {len(df_final)}, Extracted Methods {found_m}")
-    print(f"File saved in: {OUTPUT}")
+    print("\n--- DONE ---")
+    print("Total rows: " + str(len(df_final)))
+    print("Methods extracted: " + str(found_m))
+    print("File saved: " + str(OUTPUT))

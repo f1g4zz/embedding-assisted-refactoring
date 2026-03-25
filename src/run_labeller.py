@@ -42,8 +42,8 @@ def run_labeller():
             continue
 
         print("--- Labelling : " + project + " ---")
-        
-        designite_input = "analyses\\after\\" + project + "_after\\complex_methods_" + project + "_after.csv"
+        designite_input = "analyses\\" + project + "\\complex_methods_" + project + ".csv"
+        #designite_input = designite_input = "filtered\\" + project + "_filtered.csv"
         matches_input = "matches\\filtered\\matches\\matches_" + project + "_filtered.csv"
 
         command = [

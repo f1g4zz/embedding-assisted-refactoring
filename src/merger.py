@@ -3,17 +3,24 @@ import argparse
 from pathlib import Path
 
 LABELS = [
-    "Extract Method", "Extract And Move Method", "Extract Variable",
-    "Inline Variable", "Split Variable", "Parameterize Variable",
-    "Merge Variable", "Replace Pipeline", "Invert Condition",
-    "Merge Conditional Expresion"
+    "Extract Method",
+    "Extract And Move Method",
+    "Inline Method",
+    "Move Method",
+    "Pull Up Method",
+    "Push Down Method",
+    "Rename Method",
+    "Extract Variable",
+    "Inline Variable",
+    "Parameterize Variable",
+    "Rename Parameter",
+    "Rename Variable",
+    "Replace Variable with Attribute"
 ]
 
 def merge_labeled_files(input_dir, output_file):
     input_path = Path(input_dir)
     output_path = Path(output_file)
-    
-    # Creiamo il nome per il file degli "scarti" (es: merged_dataset_zeros.csv)
     output_zeros_path = output_path.parent / f"{output_path.stem}_zeros.csv"
     
     if not input_path.is_dir():
@@ -27,7 +34,6 @@ def merge_labeled_files(input_dir, output_file):
     total_labeled = 0
     
     csv_files = list(input_path.glob("*.csv"))
-    
     if not csv_files:
         print(f"No CSV files found at {input_dir}")
         return
@@ -35,17 +41,16 @@ def merge_labeled_files(input_dir, output_file):
     print(f"Found {len(csv_files)} files.")
 
     for file in csv_files:
-        if file.name == output_path.name:
+        if file.name == output_path.name or file.name == output_zeros_path.name:
             continue
             
         df = pd.read_csv(file)
         
         missing_labels = [l for l in LABELS if l not in df.columns]
         if missing_labels:
-            print(f"The file {file.name} does not contain the required labels and will be skipped")
+            print(f"Skipping {file.name}: missing required label columns.")
             continue
 
-        # Maschera: True se almeno una label != 0
         has_labels_mask = (df[LABELS] != 0).any(axis=1)
         
         num_zeros = (~has_labels_mask).sum() 
@@ -54,44 +59,46 @@ def merge_labeled_files(input_dir, output_file):
         total_zeros += num_zeros
         total_labeled += num_with_labels
         
-        # Suddividiamo il dataframe
-        labeled_df = df[has_labels_mask]
-        zeros_df = df[~has_labels_mask]
+        all_labeled_dfs.append(df[has_labels_mask])
+        all_zeros_dfs.append(df[~has_labels_mask])
         
         print(f"File {file.name}: Labeled: {num_with_labels} | Zeros: {num_zeros}")
-        
-        all_labeled_dfs.append(labeled_df)
-        all_zeros_dfs.append(zeros_df)
 
-    # Salvataggio Dataset "Labeled"
     if all_labeled_dfs:
         final_labeled_df = pd.concat(all_labeled_dfs, ignore_index=True)
+        
+        label_counts = final_labeled_df[LABELS].sum().astype(int)
+        
+
         output_path.parent.mkdir(parents=True, exist_ok=True)
         final_labeled_df.to_csv(output_path, index=False)
+        
+        print(f"\n" + "="*40)
+        print(f"--- MERGE & SPLIT COMPLETED ---")
+        print(f"Total labeled rows (kept): {total_labeled}")
+        
+        print("\nRefactoring Distribution in merged dataset:")
+        for label, count in label_counts.items():
+            if count > 0:
+                print(f"  - {label.ljust(30)}: {count}")
+        
+        print(f"\nTotal zero rows (moved):   {total_zeros}")
+        print(f"Labeled file created at: {output_path}")
     
-    # Salvataggio Dataset "Zeros"
     if all_zeros_dfs:
         final_zeros_df = pd.concat(all_zeros_dfs, ignore_index=True)
         final_zeros_df.to_csv(output_zeros_path, index=False)
-    
-    print(f"\n" + "="*40)
-    print(f"--- MERGE & SPLIT COMPLETED ---")
-    print(f"Total labeled examples (kept):  {total_labeled}")
-    print(f"Total zero examples (moved):    {total_zeros}")
-    print(f"Labeled file created at: {output_path}")
-    print(f"Zeros file created at:   {output_zeros_path}")
-    print("="*40)
+        print(f"Zeros file created at:   {output_zeros_path}")
+        print("="*40)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="CSV Merger & Splitter: separates samples with labels from those with all zeros.")
+    parser = argparse.ArgumentParser(description="CSV Merger & Splitter")
     parser.add_argument('--dir', required=True, help='Working directory')
     parser.add_argument('--out', default='merged_dataset_filtered.csv', help='Main output file name')
     
     args = parser.parse_args()
-
-    # Risoluzione percorsi (mantenuta la tua logica originale)
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
     
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
     def resolve(p):
         path = Path(p)
         return path if path.is_absolute() else (BASE_DIR / path).resolve()

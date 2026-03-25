@@ -44,7 +44,8 @@ def run_miner():
 
         print("--- Mining: " + project + " ---")
         
-        designite_input = "filtered\\" + project + "_filtered.csv"
+        #designite_input = "filtered\\" + project + "_filtered.csv"
+        designite_input = "analyses\\" + project + "\\complex_methods_" + project + ".csv"
         refminer_input = "mined_projects\\" + project + ".json"
 
         command = [
@@ -72,4 +73,4 @@ if __name__ == "__main__":
         run_miner()
     except ImportError:
         print("ERROR: Pandas not found.")
-        print("tryin to execute: " + sys.executable + " -m pip install pandas")
+        print("tryin to execute install pip: " + sys.executable + " -m pip install pandas")

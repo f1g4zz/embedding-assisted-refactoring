@@ -36,6 +36,7 @@ def run_build_dataset_after():
         print("Created directory: " + base_after_dir)
 
     for project in projects:
+     
         project_after_dir = os.path.join(base_after_dir, project + "_after")
         if not os.path.exists(project_after_dir):
             os.makedirs(project_after_dir)
@@ -48,17 +49,19 @@ def run_build_dataset_after():
 
         print("--- Building Dataset (After): " + project + " ---")
         
-        project_path = os.path.join(ANALYSES_PATH, project)
+  
+        project_source_path = os.path.join(base_after_dir, project + "_after")
 
-        if not os.path.exists(project_path):
+        if not os.path.exists(project_source_path):
             print(">>> ERROR: Source folder not found for " + project)
-            print("    Path checked: " + project_path)
+            print("    Path checked: " + project_source_path)
             continue
 
         command = [
             sys.executable, script_path,
-            "--project", project_path,
-            "--output", output_file
+            "--project", project_source_path,
+            "--output", output_file,
+            "--no-embeddings"
         ]
 
         try:
