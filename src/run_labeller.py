@@ -12,9 +12,9 @@ projects = [
     "sonarqube", "fred", "choco-solver", "closure-compiler", "bazel", 
     "geode", "asterixdb", "wildfly", "buck", "owlapi", "cassandra", 
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
-    "causeway", "openejb", "OsmAnd", "cxf", "WordPress-Android", 
+    "causeway", "OsmAnd", "cxf", "WordPress-Android", 
     "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-    "azure-sdk-for-java", "phoenix", "mule", "elassandra", "ontop", 
+     "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 
@@ -42,8 +42,8 @@ def run_labeller():
             continue
 
         print("--- Labelling : " + project + " ---")
-        designite_input = "analyses\\" + project + "\\complex_methods_" + project + ".csv"
-        #designite_input = designite_input = "filtered\\" + project + "_filtered.csv"
+        #designite_input = "analyses\\" + project + "\\" + project + ".csv"
+        designite_input = designite_input = "filtered\\" + project + "_filtered.csv"
         matches_input = "matches\\filtered\\matches\\matches_" + project + "_filtered.csv"
 
         command = [

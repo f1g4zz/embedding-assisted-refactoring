@@ -2,11 +2,11 @@ import subprocess
 import os
 import sys
 
-JAR_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\ck\ck\target\ck-0.7.1-SNAPSHOT-jar-with-dependencies.jar"
+JAR_PATH = r"D:\papersEvolution\DesigniteJava\ck\ck\target\ck-0.7.1-SNAPSHOT-jar-with-dependencies.jar"
 
-PROJECTS_ROOT = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\projects"
+PROJECTS_ROOT = r"D:\papersEvolution\DesigniteJava\projects"
 
-RESULTS_ROOT = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\ck_analysis"
+RESULTS_ROOT = r"D:\papersEvolution\DesigniteJava\ck_analysis"
 
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
@@ -17,9 +17,9 @@ projects = [
     "sonarqube", "fred", "choco-solver", "closure-compiler", "bazel", 
     "geode", "asterixdb", "wildfly", "buck", "owlapi", "cassandra", 
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
-    "causeway", "openejb", "OsmAnd", "cxf", "WordPress-Android", 
-    "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-    "azure-sdk-for-java", "phoenix", "mule", "elassandra", "ontop", 
+    "causeway",  "OsmAnd", "cxf", "WordPress-Android", 
+    "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak",
+      "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 

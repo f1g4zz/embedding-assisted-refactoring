@@ -3,10 +3,10 @@ import os
 import sys
 
 
-BASE_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\project_thesis\src"
+BASE_PATH = r"D:\papersEvolution\DesigniteJava\project_thesis\src"
 
 
-ANALYSES_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\analyses"
+ANALYSES_PATH = r"D:\papersEvolution\DesigniteJava\analyses"
 
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
@@ -17,9 +17,9 @@ projects = [
     "sonarqube", "fred", "choco-solver", "closure-compiler", "bazel", 
     "geode", "asterixdb", "wildfly", "buck", "owlapi", "cassandra", 
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
-    "causeway", "openejb", "OsmAnd", "cxf", "WordPress-Android", 
+    "causeway", "OsmAnd", "cxf", "WordPress-Android", 
     "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-    "azure-sdk-for-java", "phoenix", "mule", "elassandra", "ontop", 
+     "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 
@@ -40,7 +40,7 @@ def run_build_before():
             print("    Path checked: " + project_dir)
             continue
 
-        output_file = os.path.join(project_dir, "complex_methods_" + project + ".csv")
+        output_file = os.path.join(project_dir,  project + ".csv")
 
         if os.path.exists(output_file):
             print(">>> Project " + project + " already done. Skipping.")
@@ -51,7 +51,8 @@ def run_build_before():
         command = [
             sys.executable, script_path,
             "--project", project_dir,
-            "--output", output_file
+            "--output", output_file,
+            "--no-embeddings"
         ]
 
         try:

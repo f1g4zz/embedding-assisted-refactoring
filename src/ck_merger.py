@@ -1,132 +1,111 @@
 import pandas as pd
 import numpy as np
 import argparse
-import os
+import re
 import sys
 from pathlib import Path
 
-def normalize_path(path):
-    if pd.isna(path): return ""
-    return str(path).replace('\\', '/').lower().strip()
+def ultra_simple_clean(text):
+    """
+    Pulisce chiavi di classi e package.
+    Gestisce il caso delle classi anonime ($):
+    Esempio: 'org.freeplane.ActivatorImpl$Anonymous2' -> 'orgfreeplaneactivatorimpl'
+    """
+    if pd.isna(text) or text == 'nan': return ""
+    t = str(text).lower().strip()
+    
+    if t.endswith('.java'): t = t[:-5]
+    
+    t = t.split('$')[0]
+    
+    for char in ['.', '/', '\\', '_', '-']:
+        t = t.replace(char, '')
+    return t
+
+def clean_method_name(text):
+    """
+    Pulisce il nome del metodo.
+    Esempio: 'setHelp/1[java.lang.String]' -> 'sethelp'
+    """
+    if pd.isna(text) or text == 'nan': return ""
+    t = str(text).lower().strip()
+    # Taglia allo slash, parentesi o quadra
+    t = re.split(r'[/(\[]', t)[0]
+    t = re.sub(r'[^a-z0-9]', '', t)
+    return t
 
 def apply_prefixes(df, columns_to_prefix, prefix):
-    rename_dict = {}
-    for col in df.columns:
-        match = next((c for c in columns_to_prefix if c.lower() == col.lower()), None)
-        if match:
-            rename_dict[col] = "{}{}".format(prefix, col)
+    """Rinomina le metriche per distinguerle (es. LOC -> class_LOC)"""
+    rename_dict = {col: f"{prefix}{col}" for col in df.columns if col in columns_to_prefix}
     return df.rename(columns=rename_dict)
 
 def enrich_dataset(main_path, methods_path, classes_path, out_matches, out_track):
-    print("Process started for: " + os.path.basename(main_path))
-    sys.stdout.flush()
-    
+    print(f"\n--- ELABORAZIONE IN CORSO (Anonymous Classes Support) ---")
     df_main = pd.read_csv(main_path)
     df_methods = pd.read_csv(methods_path)
     df_classes = pd.read_csv(classes_path)
 
-    df_main.columns = [c.strip() for c in df_main.columns]
+    for df in [df_main, df_methods, df_classes]:
+        df.columns = [c.strip() for c in df.columns]
+
+    metrics = ["cbo", "cboModified", "fanin", "fanout", "wmc", "rfc", "loc", 
+               "dit", "noc", "lcom", "lcom*", "tcc", "lcc", "returnsQty", 
+               "variablesQty", "parametersQty"]
     
-    emb_cols = [c for c in df_main.columns if 'emb' in c.lower()]
-    if emb_cols:
-        print("Cleaning dataset: removing " + str(len(emb_cols)) + " embedding columns")
-        sys.stdout.flush()
-        df_main = df_main.drop(columns=emb_cols)
+    df_methods = apply_prefixes(df_methods, metrics, "method_")
+    df_classes = apply_prefixes(df_classes, metrics, "class_")
 
-    main_cols_to_prefix = ["NOF","NOPF","NOM","NOPM","LOC","WMC","NC","DIT","LCOM","Fan-In","Fan-Out"]
-    df_main = apply_prefixes(df_main, main_cols_to_prefix, "class_")
 
-    method_cols_to_prefix = ["cbo","cboModified","fanin","fanout","wmc","rfc","loc"]
-    df_methods = apply_prefixes(df_methods, method_cols_to_prefix, "method_")
-
-    class_cols_to_prefix = ["cbo","cboModified","fanin","fanout","wmc","dit","noc","rfc","lcom","lcom*","tcc","lcc", "loc"]
-    df_classes = apply_prefixes(df_classes, class_cols_to_prefix, "class_")
-
-    df_main['path_key'] = df_main['File'].apply(normalize_path)
-    df_methods['path_key'] = df_methods['file'].apply(normalize_path)
-    df_classes['path_key'] = df_classes['file'].apply(normalize_path)
-
-    tracking_info = []
-    enriched_method_rows = []
-
-    print("Executing methods enrichment...")
-    sys.stdout.flush()
+    df_main['match_key_class'] = (df_main['Package'].astype(str) + df_main['Class'].astype(str)).apply(ultra_simple_clean)
     
-    total_rows = len(df_main)
-    for idx, row in df_main.iterrows():
-        if idx > 0 and idx % 100 == 0:
-            sys.stdout.write("\rProcessed {}/{} methods...".format(idx, total_rows))
-            sys.stdout.flush()
-            
-        f_main = row['path_key']
-        l_main = row['Line no']
-        m_name_main = str(row['Method']).split('(')[0].strip().lower()
-        
-        file_token = f_main.split('/')[-1]
-        
-        mask = (df_methods['path_key'].str.endswith(file_token)) & \
-               (df_methods['line'] >= l_main - 10) & \
-               (df_methods['line'] <= l_main + 10)
-        
-        match = df_methods[mask].copy()
-        status = "no_match"
-        
-        if match.empty:
-            mask_fallback = (df_methods['path_key'].str.endswith(file_token)) & \
-                            (df_methods['method'].str.lower().str.contains(m_name_main))
-            match = df_methods[mask_fallback].copy()
-            if not match.empty: status = "name_fallback"
-        else:
-            status = "range_match"
+    df_methods['match_key_class'] = df_methods['class'].apply(ultra_simple_clean)
+    df_classes['match_key_class'] = df_classes['class'].apply(ultra_simple_clean)
 
-        match_row = pd.Series(index=df_methods.columns, dtype='object')
-        if not match.empty:
-            match['dist'] = (match['line'] - l_main).abs()
-            best_match = match.sort_values('dist').iloc[0]
-            if status != "name_fallback" and best_match['dist'] == 0: status = "exact"
-            match_row = best_match
-            
-        tracking_info.append({'main_idx': idx, 'file': row['File'], 'method': row['Method'], 'status': status})
-        enriched_method_rows.append(match_row)
+    df_main['match_key_method'] = df_main['Method'].apply(clean_method_name)
+    df_methods['match_key_method'] = df_methods['method'].apply(clean_method_name)
 
-    sys.stdout.write("\rProcessed {}/{} methods...\n".format(total_rows, total_rows))
-    sys.stdout.flush()
 
-    df_methods_matches = pd.DataFrame(enriched_method_rows).reset_index(drop=True)
-    
-    cols_to_drop = [c for c in ['file', 'line', 'class', 'method', 'dist', 'constructor', 'path_key'] if c in df_methods_matches.columns]
-    df_methods_matches = df_methods_matches.drop(columns=cols_to_drop)
-    
-    df_combined = pd.concat([df_main, df_methods_matches], axis=1)
+    df_methods_unique = df_methods.drop_duplicates(subset=['match_key_class', 'match_key_method'], keep='first')
+    df_classes_unique = df_classes.drop_duplicates(subset=['match_key_class'], keep='first')
 
-    print("Executing classes enrichment...")
-    sys.stdout.flush()
-    
-    df_combined['class_key'] = df_combined['Class'].astype(str).str.strip().str.lower()
-    df_classes['class_key'] = df_classes['class'].astype(str).apply(lambda x: x.split('.')[-1].split('$')[0].lower())
-    
-    df_classes_unique = df_classes.drop_duplicates(subset=['path_key', 'class_key']).copy()
-    
-    df_final = df_combined.merge(
-        df_classes_unique,
-        on=['path_key', 'class_key'],
+    df_combined = df_main.merge(
+        df_methods_unique,
+        on=['match_key_class', 'match_key_method'],
         how='left',
-        suffixes=('', '_ck_cls')
+        suffixes=('', '_meth_dup')
     )
 
-    to_remove = [c for c in df_final.columns if '_ck_cls' in c or c in ['file', 'class', 'path_key', 'class_key']]
-    df_final = df_final.drop(columns=[c for c in to_remove if c in df_final.columns])
+    df_final = df_combined.merge(
+        df_classes_unique,
+        on='match_key_class',
+        how='left',
+        suffixes=('', '_cls_dup')
+    )
 
-    print("Saving enriched dataset: " + out_matches)
-    sys.stdout.flush()
+
+    df_final = df_final.drop_duplicates(subset=['Package', 'Class', 'Method'], keep='first')
+
+    cols_to_drop = [c for c in df_final.columns if '_dup' in c or 
+                    c in ['match_key_class', 'match_key_method', 'file', 'class', 'method']]
     
-    Path(out_matches).parent.mkdir(parents=True, exist_ok=True)
-    Path(out_track).parent.mkdir(parents=True, exist_ok=True)
+    df_final = df_final.drop(columns=[c for c in cols_to_drop if c in df_final.columns])
     
+    if 'line' in df_final.columns:
+        cols = list(df_final.columns)
+        cols.insert(cols.index('Method') + 1, cols.pop(cols.index('line')))
+        df_final = df_final[cols]
+
+    print("\n" + "="*50)
+    print(f"REPORT MATCHING:")
+    print(f"Righe totali: {len(df_final)}")
+    if 'method_wmc' in df_final.columns:
+        print(f"Match Metodi (incl. Anonime): {df_final['method_wmc'].notna().sum()}")
+    if 'class_cbo' in df_final.columns:
+        print(f"Match Classi: {df_final['class_cbo'].notna().sum()}")
+    print("="*50 + "\n")
+
     df_final.to_csv(out_matches, index=False)
-    pd.DataFrame(tracking_info).to_csv(out_track, index=False)
-    print("Success: project processed.")
-    sys.stdout.flush()
+    print(f"Dataset salvato in {out_matches}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -134,18 +113,7 @@ if __name__ == "__main__":
     parser.add_argument('--methods', required=True)
     parser.add_argument('--classes', required=True)
     parser.add_argument('--out_matches', required=True)
-    parser.add_argument('--out_track', required=True)
+    parser.add_argument('--out_track', required=False)
     args = parser.parse_args()
-
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
-    def resolve(p):
-        path = Path(p)
-        return path if path.is_absolute() else BASE_DIR / path
-
-    enrich_dataset(
-        str(resolve(args.main)), 
-        str(resolve(args.methods)), 
-        str(resolve(args.classes)),
-        str(resolve(args.out_matches)), 
-        str(resolve(args.out_track))
-    )
+    
+    enrich_dataset(args.main, args.methods, args.classes, args.out_matches, args.out_track)

@@ -3,19 +3,16 @@ import argparse
 from pathlib import Path
 
 LABELS = [
-    "Extract Method",
-    "Extract And Move Method",
-    "Inline Method",
-    "Move Method",
-    "Pull Up Method",
-    "Push Down Method",
-    "Rename Method",
-    "Extract Variable",
-    "Inline Variable",
-    "Parameterize Variable",
-    "Rename Parameter",
-    "Rename Variable",
-    "Replace Variable with Attribute"
+            "Change Variable Type",
+            "Change Parameter Type",
+            "Change Return Type",
+            "Extract Method",
+            "Move Method",
+            "Rename Method",
+            "Rename Variable",
+            "Rename Parameter",
+            "Extract Variable",
+            "Add Parameter"
 ]
 
 def merge_labeled_files(input_dir, output_file):

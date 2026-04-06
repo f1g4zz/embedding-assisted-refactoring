@@ -23,7 +23,6 @@
 * **Adempiere**: https://github.com/adempiere/adempiere.git
 * **Alluxio**: https://github.com/Alluxio/alluxio.git
 * **AsterixDB**: https://github.com/apache/asterixdb.git
-* **Azure-sdk-for-java**: https://github.com/Azure/azure-sdk-for-java.git
 * **BaseX**: https://github.com/BaseXdb/basex.git
 * **Batfish**: https://github.com/batfish/batfish.git
 * **Bazel**: https://github.com/bazelbuild/bazel.git
@@ -65,7 +64,6 @@
 * **Netty**: https://github.com/netty/netty.git
 * **Nuxeo**: https://github.com/nuxeo/nuxeo.git
 * **Ontop**: https://github.com/ontop/ontop.git
-* **OpenEJB**: https://github.com/apache/tomee.git
 * **OrientDB**: https://github.com/orientechnologies/orientdb.git
 * **OsmAnd**: https://github.com/osmandapp/OsmAnd.git
 * **OWLAPI**: https://github.com/owlcs/owlapi.git

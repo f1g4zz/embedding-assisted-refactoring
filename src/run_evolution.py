@@ -12,9 +12,9 @@ projects = [
     "sonarqube", "fred", "choco-solver", "closure-compiler", "bazel", 
     "geode", "asterixdb", "wildfly", "buck", "owlapi", "cassandra", 
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
-    "causeway", "openejb", "OsmAnd", "cxf", "WordPress-Android", 
+    "causeway","OsmAnd", "cxf", "WordPress-Android", 
     "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-    "azure-sdk-for-java", "phoenix", "mule", "elassandra", "ontop", 
+    "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 
@@ -41,8 +41,8 @@ def run_evolution():
 
         print("--- Evolution: " + project + " ---")
         
-        before = "analyses\\" + project + "\\complex_methods_" + project + ".csv"
-        after = "analyses\\after\\" + project + "_after\\complex_methods_" + project + "_after.csv"
+        before = "analyses\\" + project + "\\" + project + ".csv"
+        after = "analyses\\after\\" + project + "\\" + project + "_after.csv"
         refminer = "mined_projects\\" + project + ".json"
 
         command = [

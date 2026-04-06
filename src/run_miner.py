@@ -12,9 +12,9 @@ projects = [
     "sonarqube", "fred", "choco-solver", "closure-compiler", "bazel", 
     "geode", "asterixdb", "wildfly", "buck", "owlapi", "cassandra", 
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
-    "causeway", "openejb", "OsmAnd", "cxf", "WordPress-Android", 
+    "causeway", "OsmAnd", "cxf", "WordPress-Android", 
     "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-    "azure-sdk-for-java", "phoenix", "mule", "elassandra", "ontop", 
+     "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 
@@ -44,8 +44,8 @@ def run_miner():
 
         print("--- Mining: " + project + " ---")
         
-        #designite_input = "filtered\\" + project + "_filtered.csv"
-        designite_input = "analyses\\" + project + "\\complex_methods_" + project + ".csv"
+        designite_input = "filtered\\" + project + "_filtered.csv"
+        #designite_input = "analyses\\" + project + "\\" + project + ".csv"
         refminer_input = "mined_projects\\" + project + ".json"
 
         command = [

@@ -2,9 +2,9 @@ import subprocess
 import os
 import sys
 
-SRC_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\project_thesis\src"
+SRC_PATH = r"D:\papersEvolution\DesigniteJava\project_thesis\src"
 
-ANALYSES_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava\analyses"
+ANALYSES_PATH = r"D:\papersEvolution\DesigniteJava\analyses"
 
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
@@ -15,9 +15,9 @@ projects = [
     "sonarqube", "fred", "choco-solver", "closure-compiler", "bazel", 
     "geode", "asterixdb", "wildfly", "buck", "owlapi", "cassandra", 
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
-    "causeway", "openejb", "OsmAnd", "cxf", "WordPress-Android", 
+    "causeway", "OsmAnd", "cxf", "WordPress-Android", 
     "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-    "azure-sdk-for-java", "phoenix", "mule", "elassandra", "ontop", 
+     "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 
@@ -37,11 +37,11 @@ def run_build_dataset_after():
 
     for project in projects:
      
-        project_after_dir = os.path.join(base_after_dir, project + "_after")
+        project_after_dir = os.path.join(base_after_dir, project)
         if not os.path.exists(project_after_dir):
             os.makedirs(project_after_dir)
 
-        output_file = os.path.join(project_after_dir, "complex_methods_" + project + "_after.csv")
+        output_file = os.path.join(project_after_dir, project + "_after.csv")
 
         if os.path.exists(output_file):
             print(">>> Project " + project + " (after) already exists. Skipping.")
@@ -50,7 +50,7 @@ def run_build_dataset_after():
         print("--- Building Dataset (After): " + project + " ---")
         
   
-        project_source_path = os.path.join(base_after_dir, project + "_after")
+        project_source_path = os.path.join(base_after_dir, project )
 
         if not os.path.exists(project_source_path):
             print(">>> ERROR: Source folder not found for " + project)

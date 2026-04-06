@@ -96,14 +96,14 @@ if __name__ == "__main__":
         "Magic Number", "Long Identifier", "Duplicate Code", "Deep Inheritance"
     ]
 
-    target_col = next((c for c in df_designite.columns if c.lower() == 'smell'), None)
+    #target_col = next((c for c in df_designite.columns if c.lower() == 'smell'), None)
 
-    if target_col:
-        mask = df_designite[target_col].str.strip().isin(INTERESTING_SMELLS)
-        df_designite = df_designite[mask].reset_index(drop=True)
-        print("Rows after smell filtering: " + str(len(df_designite)))
-    else:
-        print("ERROR: Column 'Smell' not found!"); sys.exit(1)
+    #if target_col:
+    #    mask = df_designite[target_col].str.strip().isin(INTERESTING_SMELLS)
+    #    df_designite = df_designite[mask].reset_index(drop=True)
+    #    print("Rows after smell filtering: " + str(len(df_designite)))
+    #else:
+    #    print("ERROR: Column 'Smell' not found!"); sys.exit(1)
 
     line_col = next((c for c in df_designite.columns if c.lower() in ['line no', 'line_no']), 'Line no')
     
