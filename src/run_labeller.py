@@ -43,13 +43,13 @@ def run_labeller():
 
         print("--- Labelling : " + project + " ---")
         #designite_input = "analyses\\" + project + "\\" + project + ".csv"
-        designite_input = designite_input = "filtered\\" + project + "_filtered.csv"
+        designite_input = "filtered\\" + project + "_filtered.csv"
         matches_input = "matches\\filtered\\matches\\matches_" + project + "_filtered.csv"
 
         command = [
             sys.executable, "labeller.py",
             "--designite", designite_input,
-            "--refminer", matches_input,
+            "--matches", matches_input,
             "--out", output_file
         ]
 

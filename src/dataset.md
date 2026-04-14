@@ -38,7 +38,6 @@
 * **DBeaver**: https://github.com/dbeaver/dbeaver.git
 * **Deeplearning4j**: https://github.com/eclipse/deeplearning4j.git
 * **Directory-server**: https://github.com/apache/directory-server.git
-* **Elassandra**: https://github.com/strapdata/elassandra.git
 * **Felix**: https://github.com/apache/felix.git
 * **Flow**: https://github.com/vaadin/flow.git
 * **Fred**: https://github.com/freenet/fred.git
@@ -52,7 +51,6 @@
 * **H2-Research**: https://github.com/h2database/h2database.git
 * **Hibernate-orm**: https://github.com/hibernate/hibernate-orm.git
 * **Hive**: https://github.com/apache/hive.git
-* **Intellij-plugins**: https://github.com/JetBrains/intellij-plugins.git
 * **Jackrabbit-oak**: https://github.com/apache/jackrabbit-oak.git
 * **JOML**: https://github.com/JOML-Software/JOML.git
 * **Knime-core**: https://github.com/knime/knime-core.git

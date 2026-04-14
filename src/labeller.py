@@ -1,112 +1,113 @@
 import pandas as pd
-import re
 import argparse
+import os
 from pathlib import Path
 
 LABELS = [
-            "Change Variable Type",
-            "Change Parameter Type",
-            "Change Return Type",
-            "Extract Method",
-            "Move Method",
-            "Rename Method",
-            "Rename Variable",
-            "Rename Parameter",
-            "Extract Variable",
-            "Add Parameter"
+    "Change Variable Type",
+    "Change Parameter Type",
+    "Change Return Type",
+    "Extract Method",
+    "Move Method",
+    "Rename Method",
+    "Rename Variable",
+    "Rename Parameter",
+    "Extract Variable",
+    "Add Parameter"
 ]
 
-def extract_method_name(row):
-    desc = row['desc']
-    if pd.isna(desc): return None
-    
-    if "extracted from" in desc:
-        match = re.search(r'extracted from .*?(\w+)\s*\(', desc)
-        if match: return match.group(1)
+def label_dataset(designite_p, matches_p, output_p):
+    if not os.path.exists(designite_p) or not os.path.exists(matches_p):
+        print("Error: Input files not found.")
+        return
 
-    if "in method" in desc:
-        match = re.search(r'in method .*?(\w+)\s*\(', desc)
-        if match: return match.group(1)
-
-    match = re.search(r'(\w+)\s*\(', desc)
-    return match.group(1) if match else None
-
-def label_dataset(designite_p, refminer_p, output_p):
+    project_name = Path(designite_p).stem
     output_path = Path(output_p)
-    df = pd.read_csv(Path(designite_p))
-    ref_df = pd.read_csv(Path(refminer_p))
+
+    if output_path.is_dir() or str(output_p).endswith(('\\', '/')):
+        output_path = output_path / f"{project_name}_labeled.csv"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print("--- Loading Data ---")
+    df_designite = pd.read_csv(designite_p)
+    df_designite.columns = df_designite.columns.str.strip()
+    
+    df_matches = pd.read_csv(matches_p)
+
+    col_map = {}
+    for c in ['File', 'File Path']:
+        if c in df_designite.columns: col_map['file'] = c; break
+    for c in ['Method Name', 'Method', 'Member']:
+        if c in df_designite.columns: col_map['method'] = c; break
+    for c in ['Line', 'Line no', 'Line No', 'Start Line']:
+        if c in df_designite.columns: col_map['line'] = c; break
+
+    if not all(k in col_map for k in ['file', 'method', 'line']):
+        print("Error: File, Method, or Line columns not found in Designite.")
+        return
 
     for label in LABELS:
-        df[label] = 0
+        df_designite[label] = 0
 
-    designite_keys = set()
-    for _, row in df.iterrows():
-        c = str(row['Class']).split('.')[-1].lower()
-        m = str(row['Method']).split('(')[0].strip().lower()
-        designite_keys.add((c, m))
-
+    print("--- Building Refactoring Map ---")
     ref_map = {}
-    skipped_data = []
     
-    print("Mapping Refactorings from RefMiner...")
-    for _, row in ref_df.iterrows():
-        method_name = extract_method_name(row)
-        if method_name:
-            cls_full = str(row['class_name']).replace('$', '.')
-            cls = cls_full.split('.')[-1].strip().lower()
-            meth = method_name.strip().lower()
-            key = (cls, meth)
-            
-            if key in designite_keys:
-                if key not in ref_map:
-                    ref_map[key] = set()
-                ref_map[key].add(row['refactoring'])
-            else:
-                skipped_data.append({
-                    'class_refminer': row['class_name'],
-                    'method_extracted': method_name,
-                    'refactoring': row['refactoring'],
-                    'description': row['desc']
-                })
+    for _, row in df_matches.iterrows():
+        raw_path = str(row.get('File', '')).replace('\\', '/')
+        m_name = str(row.get('method', 'N/A'))
+        
+        raw_line = row.get('Line no')
+        m_line = int(raw_line) if pd.notna(raw_line) and str(raw_line).strip() else -1
+        
+        ref_type = str(row.get('refactoring', ''))
+        
+        if ref_type in LABELS:
+            key = (raw_path, m_name, m_line)
+            if key not in ref_map:
+                ref_map[key] = set()
+            ref_map[key].add(ref_type)
 
-    matches_found = 0
+    matches_applied = 0
+    rows_modified = 0
+    total_rows = len(df_designite)
+
+    print("--- Labeling Dataset ---")
     
-    labels_lower = [l.lower() for l in LABELS]
-    labels_map = dict(zip(labels_lower, LABELS)) 
+    for idx, row in df_designite.iterrows():
+        print(f"\rProcessing row {idx + 1}/{total_rows}...", end="", flush=True)
 
-    for idx, row in df.iterrows():
-        d_class = str(row['Class']).replace('$', '.').split('.')[-1].strip().lower()
-        d_method = str(row['Method']).split('(')[0].strip().lower()
-        key = (d_class, d_method)
+        d_path = str(row.get(col_map['file'], '')).replace('\\', '/')
+        d_method = str(row.get(col_map['method'], 'N/A'))
+        
+        d_raw_line = row.get(col_map['line'])
+        d_line = int(d_raw_line) if pd.notna(d_raw_line) and str(d_raw_line).strip() else -1
+        
+        key = (d_path, d_method, d_line)
         
         if key in ref_map:
             for ref_name in ref_map[key]:
-                ref_name_clean = ref_name.strip().lower()
-                if ref_name_clean in labels_lower:
-                    column_name = labels_map[ref_name_clean]
-                    df.at[idx, column_name] = 1
-                    matches_found += 1
+                df_designite.at[idx, ref_name] = 1
+                matches_applied += 1
+            rows_modified += 1
 
-    print(f"\n--- REPORT ---")
-    print(f"Total rows in dataset: {len(df)}")
-    print(f"Unique Methods in Designite: {len(designite_keys)}")
-    print(f"RefMiner Methods matched: {len(ref_map)}")
-    print(f"Total '1' labels applied: {matches_found}")
-    print(f"Refactorings not matched (saved in skipped_methods.csv): {len(skipped_data)}")
+    df_designite.to_csv(output_path, index=False)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-    
-    skipped_file = output_path.parent / "skipped_methods.csv"
-    pd.DataFrame(skipped_data).drop_duplicates().to_csv(skipped_file, index=False)
-    
-    print(f"\n[OK] Dataset labeled saved in: {output_path}")
+    print("\n\n" + "="*40)
+    print("LABELING COMPLETED")
+    print(f"Total Designite Dataset rows: {total_rows}")
+    print(f"Unique methods in matches.csv: {len(ref_map)}")
+    print(f"Designite rows modified: {rows_modified}")
+    print(f"Total '1' labels applied: {matches_applied}")
+    print("="*40)
+    print(f"[OK] File saved to: {output_path}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--designite', required=True, help="Path to MethodMetrics/Smells CSV from Designite")
-    parser.add_argument('--refminer', required=True, help="Path to RefactoringMiner CSV")
-    parser.add_argument('--out', default='results/dataset_labeled.csv', help="Output CSV path")
+    parser.add_argument('--designite', required=True, help="Path to the original Designite CSV file")
+    parser.add_argument('--matches', required=True, help="Path to the matches_*.csv file generated by the previous script")
+    parser.add_argument('--out', default='results/', help="Path to the final supervised CSV or directory")
     args = parser.parse_args()
     
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -114,4 +115,4 @@ if __name__ == "__main__":
         path = Path(p)
         return path if path.is_absolute() else (BASE_DIR / path).resolve()
 
-    label_dataset(resolve(args.designite), resolve(args.refminer), resolve(args.out))
+    label_dataset(str(resolve(args.designite)), str(resolve(args.matches)), str(resolve(args.out)))

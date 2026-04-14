@@ -6,7 +6,6 @@ import glob
 import shutil
 import numpy as np
 
-# --- CONFIGURAZIONE ---
 SOURCE_ROOT = "/mnt/d/papersEvolution/DesigniteJava/projects"
 OUTPUT_BASE = "/mnt/d/papersEvolution/DesigniteJava/projects_output"
 LOG_FILE = os.path.join(OUTPUT_BASE, "detailed_pipeline.log")
@@ -65,17 +64,15 @@ def get_tasks(p_name, p_path):
         tasks.append((f"{p_name}_chunk{idx}", os.path.commonpath(curr_dirs)))
     return tasks
 
-print(f"=== PIPELINE AVVIATA (FAST SKIP + TURBO EDGES) ===", flush=True)
+print(f"=== PIPELINE STARTED (FAST SKIP + TURBO EDGES) ===", flush=True)
 
 for i, p_name in enumerate(PROJECTS, 1):
-    # --- CONTROLLO SKIP IMMEDIATO (Senza toccare il disco pesante) ---
     check_f = os.path.join(OUTPUT_BASE, "embeddings", f"{p_name}.vec")
     check_c = os.path.join(OUTPUT_BASE, "embeddings", f"{p_name}_chunk1.vec")
     if os.path.exists(check_f) or os.path.exists(check_c):
         print(f"[{i}/{len(PROJECTS)}] >>> SKIP: {p_name} <<<", flush=True)
         continue
 
-    # --- SOLO SE DEVE LAVORARE: RESET RAM E DISCO ---
     subprocess.run(["pkill", "-9", "-f", "java"], capture_output=True)
     if os.path.exists("workspace"):
         shutil.rmtree("workspace", ignore_errors=True)
@@ -100,7 +97,6 @@ for i, p_name in enumerate(PROJECTS, 1):
 
         try:
             my_env = os.environ.copy()
-            # RAM limitata e No Full Resolver per stabilità
             my_env["JAVA_OPTS"] = "-Xmx5G -XX:+UseG1GC -XX:MaxGCPauseMillis=500 -Djoern.java.no_full_resolver=true"
 
             if os.path.exists(edg_out) and os.path.exists(met_out):
@@ -125,7 +121,6 @@ for i, p_name in enumerate(PROJECTS, 1):
                 if os.path.exists(tmp_sc): os.remove(tmp_sc)
                 print(" OK.", flush=True)
 
-                # STEP 4: CONVERSIONE ARCHI (TURBO - No Pydot)
                 print(f"  [4/4] Conversione Archi (Turbo)...", end="", flush=True)
                 edge_count = 0
                 with open(edg_out, "w") as out_f:
@@ -166,7 +161,7 @@ for i, p_name in enumerate(PROJECTS, 1):
 
         except Exception as e:
             subprocess.run(["pkill", "-9", "-f", "java"], capture_output=True)
-            print(f"\n  [X] ERRORE: {sub_id} -> {str(e)[:150]}", flush=True)
+            print(f"\n  [X] ERROR: {sub_id} -> {str(e)[:150]}", flush=True)
             safe_log(f"FAILED: {sub_id}")
 
-print("\n=== PIPELINE TERMINATA ===")
+print("\n=== PIPELINE FINISHED ===")

@@ -33,19 +33,15 @@ def enrich_dataset(main_path, methods_path, metadata_path, output_path):
     df_main['match_key'] = (df_main['Package'].astype(str) + df_main['Class'].astype(str)).apply(ultra_normalize)
     methods_enriched['match_key'] = methods_enriched['meta_raw_class'].apply(ultra_normalize)
 
-    # 1. Convertiamo in numerico (coerce trasforma gli errori in NaN)
     df_main['line_num'] = pd.to_numeric(df_main['line'], errors='coerce')
     methods_enriched['line_num'] = pd.to_numeric(methods_enriched['meta_raw_line'], errors='coerce')
 
-    # 2. Rimuoviamo i NaN (fondamentale prima di trasformare in int)
     df_main = df_main.dropna(subset=['line_num'])
     methods_enriched = methods_enriched.dropna(subset=['line_num'])
 
-    # 3. FIX: Forziamo entrambi a int64 per evitare l'errore di dtype mismatch
     df_main['line_num'] = df_main['line_num'].astype('int64')
     methods_enriched['line_num'] = methods_enriched['line_num'].astype('int64')
 
-    # 4. Ordinamento obbligatorio per merge_asof
     df_main = df_main.sort_values('line_num')
     methods_enriched = methods_enriched.sort_values('line_num')
 

@@ -6,11 +6,7 @@ import sys
 from pathlib import Path
 
 def ultra_simple_clean(text):
-    """
-    Pulisce chiavi di classi e package.
-    Gestisce il caso delle classi anonime ($):
-    Esempio: 'org.freeplane.ActivatorImpl$Anonymous2' -> 'orgfreeplaneactivatorimpl'
-    """
+ 
     if pd.isna(text) or text == 'nan': return ""
     t = str(text).lower().strip()
     
@@ -23,24 +19,20 @@ def ultra_simple_clean(text):
     return t
 
 def clean_method_name(text):
-    """
-    Pulisce il nome del metodo.
-    Esempio: 'setHelp/1[java.lang.String]' -> 'sethelp'
-    """
+ 
     if pd.isna(text) or text == 'nan': return ""
     t = str(text).lower().strip()
-    # Taglia allo slash, parentesi o quadra
     t = re.split(r'[/(\[]', t)[0]
     t = re.sub(r'[^a-z0-9]', '', t)
     return t
 
 def apply_prefixes(df, columns_to_prefix, prefix):
-    """Rinomina le metriche per distinguerle (es. LOC -> class_LOC)"""
+
     rename_dict = {col: f"{prefix}{col}" for col in df.columns if col in columns_to_prefix}
     return df.rename(columns=rename_dict)
 
 def enrich_dataset(main_path, methods_path, classes_path, out_matches, out_track):
-    print(f"\n--- ELABORAZIONE IN CORSO (Anonymous Classes Support) ---")
+    print(f"\n--- Loading (Anonymous Classes Support) ---")
     df_main = pd.read_csv(main_path)
     df_methods = pd.read_csv(methods_path)
     df_classes = pd.read_csv(classes_path)
@@ -97,7 +89,7 @@ def enrich_dataset(main_path, methods_path, classes_path, out_matches, out_track
 
     print("\n" + "="*50)
     print(f"REPORT MATCHING:")
-    print(f"Righe totali: {len(df_final)}")
+    print(f"Total Rows: {len(df_final)}")
     if 'method_wmc' in df_final.columns:
         print(f"Match Metodi (incl. Anonime): {df_final['method_wmc'].notna().sum()}")
     if 'class_cbo' in df_final.columns:
@@ -105,7 +97,7 @@ def enrich_dataset(main_path, methods_path, classes_path, out_matches, out_track
     print("="*50 + "\n")
 
     df_final.to_csv(out_matches, index=False)
-    print(f"Dataset salvato in {out_matches}")
+    print(f"Dataset saved in {out_matches}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
