@@ -35,6 +35,8 @@ def label_dataset(designite_p, matches_p, output_p):
     
     df_matches = pd.read_csv(matches_p)
 
+    # Dynamically locate columns for File, Method, and Line because different Designite 
+    # execution formats output slightly different column headers.
     col_map = {}
     for c in ['File', 'File Path']:
         if c in df_designite.columns: col_map['file'] = c; break
@@ -110,7 +112,8 @@ if __name__ == "__main__":
     parser.add_argument('--out', default='results/', help="Path to the final supervised CSV or directory")
     args = parser.parse_args()
     
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    # Four parents up from project_thesis/src/core/labeller.py to get DesigniteJava/
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     def resolve(p):
         path = Path(p)
         return path if path.is_absolute() else (BASE_DIR / path).resolve()

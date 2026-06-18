@@ -2,12 +2,13 @@ import subprocess
 import os
 import sys
 
+# Resolve DesigniteJava root and src root dynamically
+project_thesis_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-BASE_PATH = r"D:\papersEvolution\DesigniteJava\project_thesis\src"
+SRC_PATH = os.path.join(project_thesis_src_path, "core")
 
-
-ANALYSES_PATH = r"D:\papersEvolution\DesigniteJava\analyses"
-
+# Projects List
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
     "thredds", "thunderbird-android", "H2-Research", "qpid-jms-amqp-0-x", 
@@ -19,7 +20,7 @@ projects = [
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
     "causeway", "OsmAnd", "cxf", "WordPress-Android", 
     "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-     "phoenix", "mule", "elassandra", "ontop", 
+    "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 
@@ -29,41 +30,46 @@ projects = [
     "jhotdraw", "cuba"
 ]
 
-def run_build_before():
-    script_path = os.path.join(BASE_PATH, "build_dataset.py")
+def run_evolution():
+    script_path = os.path.join(SRC_PATH, "evolution.py")
+    output_dir = os.path.join(BASE_PATH, "filtered")
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print("Folder '" + output_dir + "' created.")
 
     for project in projects:
-        project_dir = os.path.join(ANALYSES_PATH, project)
         
-        if not os.path.exists(project_dir):
-            print(">>> Folder not found for " + project + ". Skipping.")
-            print("    Path checked: " + project_dir)
-            continue
+        output_file = os.path.join(output_dir, project + "_filtered.csv")
 
-        output_file = os.path.join(project_dir,  project + ".csv")
-
+        # Skip if file already exists
         if os.path.exists(output_file):
-            print(">>> Project " + project + " already done. Skipping.")
+            print(">>> Project " + project + " already filtered. Skipping.")
             continue
 
-        print("--- Building Dataset (Before): " + project + " ---")
+        print("--- Evolution: " + project + " ---")
         
+        before = os.path.join(BASE_PATH, "analyses", project, project + ".csv")
+        after = os.path.join(BASE_PATH, "analyses", "after", project, project + "_after.csv")
+        refminer = os.path.join(BASE_PATH, "mined_projects", project + ".json")
+
         command = [
             sys.executable, script_path,
-            "--project", project_dir,
-            "--output", output_file,
-            "--no-embeddings"
+            "--before", before,
+            "--after", after,
+            "--refminer", refminer,
+            "--output", output_file
         ]
 
         try:
             subprocess.check_call(command)
-            print("OK: Dataset built for " + project)
+            print("OK: " + project + " completed.")
         except subprocess.CalledProcessError:
-            print("ERROR: build_dataset.py failed for " + project)
+            print("ERROR: evolution.py failed for " + project)
         except Exception as e:
             print("ERROR on " + project + ": " + str(e))
         
         print("-" * 40)
 
 if __name__ == "__main__":
-    run_build_before()
+    run_evolution()

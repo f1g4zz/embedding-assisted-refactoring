@@ -1,7 +1,7 @@
 def build_class_features(df_class):
     """
-    Mantiene solo le colonne specificate, senza rinominarle.
-    Gestisce eventuali spazi bianchi nei nomi delle colonne del CSV.
+    Keeps only the specified columns without renaming them.
+    Handles any whitespace in the CSV column names.
     """
     
     target_cols = [

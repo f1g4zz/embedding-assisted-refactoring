@@ -2,11 +2,12 @@ import subprocess
 import os
 import sys
 
-JAR_PATH = r"D:\papersEvolution\DesigniteJava\ck\ck\target\ck-0.7.1-SNAPSHOT-jar-with-dependencies.jar"
+# Resolve BASE_PATH dynamically (3 parents up from project_thesis/src/runners/run_ck_analysis.py to get DesigniteJava/)
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-PROJECTS_ROOT = r"D:\papersEvolution\DesigniteJava\projects"
-
-RESULTS_ROOT = r"D:\papersEvolution\DesigniteJava\ck_analysis"
+JAR_PATH = os.path.join(BASE_PATH, "ck", "ck", "target", "ck-0.7.1-SNAPSHOT-jar-with-dependencies.jar")
+PROJECTS_ROOT = os.path.join(BASE_PATH, "projects")
+RESULTS_ROOT = os.path.join(BASE_PATH, "ck_analysis")
 
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
@@ -43,7 +44,7 @@ def run_ck_analysis():
         check_file = os.path.join(project_results_dir, "class.csv")
 
         if os.path.exists(check_file):
-            print(">>> Progetto " + project + " already done. Skipping.")
+            print(">>> Project " + project + " already done. Skipping.")
             continue
 
         if not os.path.exists(project_results_dir):
@@ -53,7 +54,7 @@ def run_ck_analysis():
         print("--- Running CK Analysis: " + project + " ---")
 
         if not os.path.exists(project_path):
-            print(">>> ERROR: Sorurce not found " + project_path)
+            print(">>> ERROR: Source not found " + project_path)
             continue
 
 

@@ -2,6 +2,12 @@ import subprocess
 import os
 import sys
 
+# Resolve DesigniteJava root and src root dynamically
+project_thesis_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+SRC_PATH = os.path.join(project_thesis_src_path, "core")
+
 # Project List
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
@@ -25,13 +31,14 @@ projects = [
 ]
 
 def run_miner():
-    matches_dir = os.path.join("matches", "filtered", "matches")
-    movements_dir = os.path.join("matches", "filtered", "movements")
+    script_path = os.path.join(SRC_PATH, "miner.py")
+    matches_dir = os.path.join(BASE_PATH, "matches", "filtered", "matches")
+    movements_dir = os.path.join(BASE_PATH, "matches", "filtered", "movements")
     
     for folder in [matches_dir, movements_dir]:
         if not os.path.exists(folder):
             os.makedirs(folder)
-            print("Creata cartella: " + folder)
+            print("Created folder: " + folder)
 
     for project in projects:
         out_matches = os.path.join(matches_dir, "matches_" + project + "_filtered.csv")
@@ -44,12 +51,11 @@ def run_miner():
 
         print("--- Mining: " + project + " ---")
         
-        designite_input = "filtered\\" + project + "_filtered.csv"
-        #designite_input = "analyses\\" + project + "\\" + project + ".csv"
-        refminer_input = "mined_projects\\" + project + ".json"
+        designite_input = os.path.join(BASE_PATH, "filtered", project + "_filtered.csv")
+        refminer_input = os.path.join(BASE_PATH, "mined_projects", project + ".json")
 
         command = [
-            sys.executable, "miner.py",
+            sys.executable, script_path,
             "--designite", designite_input,
             "--refminer", refminer_input,
             "--out_matches", out_matches,
@@ -58,9 +64,9 @@ def run_miner():
 
         try:
             subprocess.check_call(command)
-            print("OK: " + project + " succesfully completed.")
+            print("OK: " + project + " successfully completed.")
         except subprocess.CalledProcessError as e:
-            print("ERRORE: miner.py failed on " + project)
+            print("ERROR: miner.py failed on " + project)
         except Exception as e:
             print("ERROR " + project + ": " + str(e))
         
@@ -69,8 +75,8 @@ def run_miner():
 if __name__ == "__main__":
     try:
         import pandas
-        print("Ambient OK: Pandas found (v" + str(pandas.__version__) + ")")
+        print("Environment OK: Pandas found (v" + str(pandas.__version__) + ")")
         run_miner()
     except ImportError:
         print("ERROR: Pandas not found.")
-        print("tryin to execute install pip: " + sys.executable + " -m pip install pandas")
+        print("Try executing pip install: " + sys.executable + " -m pip install pandas")

@@ -6,9 +6,12 @@ import glob
 import shutil
 import numpy as np
 
-# --- CONFIGURAZIONE ---
-SOURCE_ROOT = "/mnt/d/papersEvolution/DesigniteJava/projects"
-OUTPUT_BASE = "/mnt/d/papersEvolution/DesigniteJava/projects_output"
+# Resolve BASE_PATH dynamically (3 parents up from project_thesis/src/runners/test.py to get DesigniteJava/)
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+# --- CONFIGURATION ---
+SOURCE_ROOT = os.path.join(BASE_PATH, "projects")
+OUTPUT_BASE = os.path.join(BASE_PATH, "projects_output")
 LOG_FILE = os.path.join(OUTPUT_BASE, "detailed_pipeline.log")
 LINE_BIN = "./line"
 EMB_SIZE = "64"
@@ -50,7 +53,7 @@ def get_tasks(p_name, p_path):
         tasks.append((f"{p_name}_chunk{idx}", os.path.commonpath(curr_dirs)))
     return tasks
 
-print(f"=== PIPELINE AVVIATA (SHUTDOWN PROTECTED) ===", flush=True)
+print(f"=== PIPELINE STARTED (SHUTDOWN PROTECTED) ===", flush=True)
 
 for i, p_name in enumerate(PROJECTS, 1):
     check_f = os.path.join(OUTPUT_BASE, "embeddings", f"{p_name}.vec")
@@ -73,7 +76,7 @@ for i, p_name in enumerate(PROJECTS, 1):
         if os.path.exists(emb_final) and os.path.getsize(emb_final) > 0:
             continue
 
-        print(f"\n[{i}/{len(PROJECTS)}] >>> ANALISI: {sub_id} <<<", flush=True)
+        print(f"\n[{i}/{len(PROJECTS)}] >>> ANALYSIS: {sub_id} <<<", flush=True)
         
         cpg_out = os.path.join(OUTPUT_BASE, "cpgs", f"{sub_id}.bin")
         dot_out = os.path.join(OUTPUT_BASE, "dots", sub_id)
@@ -83,18 +86,18 @@ for i, p_name in enumerate(PROJECTS, 1):
 
         try:
             my_env = os.environ.copy()
-            # FLAG ANTI-AGONIA: Se Java impazzisce, si chiude da solo
+            # OUT OF MEMORY GUARD: If Java consumes too much memory, terminate it gracefully
             my_env["JAVA_OPTS"] = "-Xmx5G -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:GCTimeLimit=70 -XX:GCHeapFreeLimit=10 -Djoern.java.no_full_resolver=true"
 
             if not (os.path.exists(edg_out) and os.path.exists(met_out)):
-                # --- STEP 1: PARSE CON TIMEOUT ---
+                # --- STEP 1: PARSE WITH TIMEOUT ---
                 try:
                     print(f"  [1/4] Joern Parse...", end="", flush=True)
                     subprocess.run(["joern-parse", sub_path, "--output", cpg_out], 
                                    env=my_env, check=True, capture_output=True, timeout=3600)
                     print(" OK.", flush=True)
                 except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                    print(f"\n  [!] CRASH/TIMEOUT in Parse su {sub_id}. Salto chunk.")
+                    print(f"\n  [!] CRASH/TIMEOUT in Parse on {sub_id}. Skipping chunk.")
                     subprocess.run(["pkill", "-9", "-f", "java"], capture_output=True)
                     safe_log(f"FAILED PARSE: {sub_id}")
                     continue
@@ -105,10 +108,10 @@ for i, p_name in enumerate(PROJECTS, 1):
                 subprocess.run(["joern-export", cpg_out, "--repr", "cfg", "--out", dot_out], 
                                env=my_env, check=True, capture_output=True)
                 dot_files = glob.glob(os.path.join(dot_out, "**/*.dot"), recursive=True)
-                print(f" OK ({len(dot_files)} file)", flush=True)
+                print(f" OK ({len(dot_files)} files)", flush=True)
 
                 # --- STEP 3: METADATA ---
-                print(f"  [3/4] Metadati Rich...", end="", flush=True)
+                print(f"  [3/4] Rich Metadata...", end="", flush=True)
                 scala = f'import io.shiftleft.semanticcpg.language._\nimportCpg("{cpg_out}")\nval writer = new java.io.PrintWriter("{met_out}")\ncpg.method.filter(_.lineNumber.isDefined).foreach {{ m => val nodeIds = m.ast.id.l.mkString(",")\nval fullClassName = m.typeDecl.fullName.headOption.getOrElse("NoClass")\nwriter.println(s"${{m.id}}|${{m.name}}|${{fullClassName}}|${{m.lineNumber.get}}|${{m.filename}}|${{nodeIds}}") }}\nwriter.close()'
                 tmp_sc = f"tmp_{sub_id}.sc"
                 with open(tmp_sc, "w") as f_sc: f_sc.write(scala)
@@ -117,7 +120,7 @@ for i, p_name in enumerate(PROJECTS, 1):
                 print(" OK.", flush=True)
 
                 # --- STEP 4: EDGELIST ---
-                print(f"  [4/4] Conversione Archi...", end="", flush=True)
+                print(f"  [4/4] Edge Conversion...", end="", flush=True)
                 edge_count = 0
                 with open(edg_out, "w") as out_f:
                     for d_file in dot_files:
@@ -131,10 +134,10 @@ for i, p_name in enumerate(PROJECTS, 1):
                                         if s.isdigit() and d.isdigit():
                                             out_f.write(f"{s} {d} 1\n"); edge_count += 1
                         except: continue
-                print(f" OK ({edge_count} archi)", flush=True)
+                print(f" OK ({edge_count} edges)", flush=True)
 
             else:
-                print(f"  [>>>] Dati intermedi trovati. Salto a LiNE...", flush=True)
+                print(f"  [>>>] Intermediate data found. Jumping to LiNE...", flush=True)
                 edge_count = sum(1 for _ in open(edg_out))
 
             # --- STEP 5: LINE ---
@@ -165,7 +168,7 @@ for i, p_name in enumerate(PROJECTS, 1):
 
         except Exception as e:
             subprocess.run(["pkill", "-9", "-f", "java"], capture_output=True)
-            print(f"\n  [X] ERRORE GENERICO su {sub_id}: {str(e)[:100]}", flush=True)
+            print(f"\n  [X] GENERIC ERROR on {sub_id}: {str(e)[:100]}", flush=True)
             safe_log(f"FAILED: {sub_id} - {str(e)[:50]}")
 
-print("\n=== PIPELINE TERMINATA ===")
+print("\n=== PIPELINE COMPLETED ===")

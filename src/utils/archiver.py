@@ -2,7 +2,8 @@ import os
 import shutil
 import sys
 
-BASE_PATH = r"C:\Users\lanza\Downloads\papersEvolution\DesigniteJava"
+# Resolve BASE_PATH dynamically (3 parents up from project_thesis/src/utils/archiver.py to get DesigniteJava/)
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
@@ -26,32 +27,34 @@ projects = [
 ]
 
 def archive_files():
-
-    archive_dir = os.path.join(BASE_PATH, "analyses", "after", "archived")
+    """
+    Moves complex_methods CSV reports from individual project folders to a single archived directory.
+    """
+    archive_dir = os.path.join(BASE_PATH, "analyses", "archived")
 
     if not os.path.exists(archive_dir):
         os.makedirs(archive_dir)
-        print("Creata cartella archivio: " + archive_dir)
+        print("Created archive directory: " + archive_dir)
 
     for project in projects:
 
-        project_folder = project + "_after"
-        filename = "complex_methods_" + project + "_after.csv"
+        project_folder = project
+        filename = "complex_methods_" + project + ".csv"
         
-        source_path = os.path.join(BASE_PATH, "analyses", "after", project_folder, filename)
+        source_path = os.path.join(BASE_PATH, "analyses", project_folder, filename)
         destination_path = os.path.join(archive_dir, filename)
 
         if os.path.exists(source_path):
             try:
                 shutil.move(source_path, destination_path)
-                print("SPOSTATO: " + project + " -> " + filename)
+                print("MOVED: " + project + " -> " + filename)
             except Exception as e:
-                print("ERRORE su " + project + ": " + str(e))
+                print("ERROR on " + project + ": " + str(e))
         else:
             if os.path.exists(destination_path):
-                print("--- " + project + ": File gia' presente in archived.")
+                print("--- " + project + ": File already exists in archived directory.")
             else:
-                print("--- " + project + ": File NON trovato in " + source_path)
+                print("--- " + project + ": File NOT found in " + source_path)
 
 if __name__ == "__main__":
     archive_files()

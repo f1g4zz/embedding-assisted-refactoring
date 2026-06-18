@@ -2,7 +2,13 @@ import subprocess
 import os
 import sys
 
-# Projects List
+# Resolve DesigniteJava root and src root dynamically
+project_thesis_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+SRC_PATH = os.path.join(project_thesis_src_path, "core")
+ANALYSES_PATH = os.path.join(BASE_PATH, "analyses")
+
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
     "thredds", "thunderbird-android", "H2-Research", "qpid-jms-amqp-0-x", 
@@ -12,9 +18,9 @@ projects = [
     "sonarqube", "fred", "choco-solver", "closure-compiler", "bazel", 
     "geode", "asterixdb", "wildfly", "buck", "owlapi", "cassandra", 
     "knime-core", "netty", "flow", "metasfresh", "hibernate-orm", 
-    "causeway","OsmAnd", "cxf", "WordPress-Android", 
+    "causeway", "OsmAnd", "cxf", "WordPress-Android", 
     "solr", "lucene", "batfish", "intellij-plugins", "jackrabbit-oak", 
-    "phoenix", "mule", "elassandra", "ontop", 
+     "phoenix", "mule", "elassandra", "ontop", 
     "Maxine-VM", "qpid", "deeplearning4j", "camel", "orientdb", 
     "nuxeo", "tuscany-sca-1.x", "basex", "tomcat", "xipki", 
     "stratosphere", "ballerina-lang", "antlr4", "midpoint", "graal", 
@@ -24,45 +30,41 @@ projects = [
     "jhotdraw", "cuba"
 ]
 
-def run_evolution():
-    output_dir = "filtered"
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        print("Folder '" + output_dir + "' created.")
+def run_build_before():
+    script_path = os.path.join(SRC_PATH, "build_dataset.py")
 
     for project in projects:
+        project_dir = os.path.join(ANALYSES_PATH, project)
         
-        output_file = os.path.join(output_dir, project + "_filtered.csv")
-
-        # Skip if file already exists
-        if os.path.exists(output_file):
-            print(">>> Project " + project + " already filtered. Skipping.")
+        if not os.path.exists(project_dir):
+            print(">>> Folder not found for " + project + ". Skipping.")
+            print("    Path checked: " + project_dir)
             continue
 
-        print("--- Evolution: " + project + " ---")
-        
-        before = "analyses\\" + project + "\\" + project + ".csv"
-        after = "analyses\\after\\" + project + "\\" + project + "_after.csv"
-        refminer = "mined_projects\\" + project + ".json"
+        output_file = os.path.join(project_dir,  project + ".csv")
 
+        if os.path.exists(output_file):
+            print(">>> Project " + project + " already done. Skipping.")
+            continue
+
+        print("--- Building Dataset (Before): " + project + " ---")
+        
         command = [
-            sys.executable, "evolution.py",
-            "--before", before,
-            "--after", after,
-            "--refminer", refminer,
-            "--output", output_file
+            sys.executable, script_path,
+            "--project", project_dir,
+            "--output", output_file,
+            "--no-embeddings"
         ]
 
         try:
-        
             subprocess.check_call(command)
-            print("OK: " + project + " completato.")
+            print("OK: Dataset built for " + project)
         except subprocess.CalledProcessError:
-            print("ERRORE: evolution.py ha fallito per " + project)
+            print("ERROR: build_dataset.py failed for " + project)
         except Exception as e:
-            print("ERROR" + project + ": " + str(e))
+            print("ERROR on " + project + ": " + str(e))
         
         print("-" * 40)
 
 if __name__ == "__main__":
-    run_evolution()
+    run_build_before()

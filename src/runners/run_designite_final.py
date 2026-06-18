@@ -41,4 +41,4 @@ with open(LOG_FILE, "a") as log:
             log.write(f"ERROR  {p_name}: {str(e)}\n")
             log.flush()
 
-print("--- FINE ANALISI ---")
+print("--- ANALYSIS END ---")

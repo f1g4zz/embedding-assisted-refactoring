@@ -6,7 +6,10 @@ import sys
 from pathlib import Path
 
 def ultra_simple_clean(text):
- 
+    """
+    Cleans class names for matching. Removes '.java' extension, anonymous/inner class 
+    suffixes (delimited by '$'), and common separators, then downcases the result.
+    """
     if pd.isna(text) or text == 'nan': return ""
     t = str(text).lower().strip()
     
@@ -19,7 +22,10 @@ def ultra_simple_clean(text):
     return t
 
 def clean_method_name(text):
- 
+    """
+    Cleans method names by extracting the base name (excluding arguments)
+    and removing any non-alphanumeric characters.
+    """
     if pd.isna(text) or text == 'nan': return ""
     t = str(text).lower().strip()
     t = re.split(r'[/(\[]', t)[0]
@@ -27,7 +33,6 @@ def clean_method_name(text):
     return t
 
 def apply_prefixes(df, columns_to_prefix, prefix):
-
     rename_dict = {col: f"{prefix}{col}" for col in df.columns if col in columns_to_prefix}
     return df.rename(columns=rename_dict)
 
@@ -88,12 +93,12 @@ def enrich_dataset(main_path, methods_path, classes_path, out_matches, out_track
         df_final = df_final[cols]
 
     print("\n" + "="*50)
-    print(f"REPORT MATCHING:")
+    print(f"MATCHING REPORT:")
     print(f"Total Rows: {len(df_final)}")
     if 'method_wmc' in df_final.columns:
-        print(f"Match Metodi (incl. Anonime): {df_final['method_wmc'].notna().sum()}")
+        print(f"Method Matches (incl. Anonymous Classes): {df_final['method_wmc'].notna().sum()}")
     if 'class_cbo' in df_final.columns:
-        print(f"Match Classi: {df_final['class_cbo'].notna().sum()}")
+        print(f"Class Matches: {df_final['class_cbo'].notna().sum()}")
     print("="*50 + "\n")
 
     df_final.to_csv(out_matches, index=False)

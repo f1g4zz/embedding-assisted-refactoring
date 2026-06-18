@@ -1,7 +1,10 @@
 import pandas as pd
 
 def build_smell_features(df_smells):
-   
+    """
+    Strips whitespace from column names, selects target fields describing code smells,
+    and returns a copy of the filtered DataFrame.
+    """
     target_cols = [
         "Project","Package","Class","Method","Smell","Description","File"
     ]

@@ -1,3 +1,7 @@
+"""
+Merges labeled CSV files from a directory, separating rows with refactorings (labeled) 
+from those without (zeros), and outputting them into separate CSV files.
+"""
 import pandas as pd
 import argparse
 from pathlib import Path
@@ -95,7 +99,8 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    # Four parents up from project_thesis/src/core/merger.py to get DesigniteJava/
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     def resolve(p):
         path = Path(p)
         return path if path.is_absolute() else (BASE_DIR / path).resolve()

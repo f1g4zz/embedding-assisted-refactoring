@@ -2,8 +2,11 @@ import subprocess
 import os
 import sys
 
-BASE_PATH = "D:\papersEvolution\DesigniteJava"
-SRC_PATH = os.path.join(BASE_PATH, "project_thesis", "src")
+# Resolve DesigniteJava root and src root dynamically
+project_thesis_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+SRC_PATH = os.path.join(project_thesis_src_path, "core")
 
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 
@@ -37,14 +40,14 @@ def run_all_mergers():
         out_track = os.path.join(BASE_PATH, "ck_merged", project + "_tracking_log.csv")
 
         if not os.path.exists(main_input):
-            print(">>> Skip " + project + ": Manca il file labelled_filtered.", flush=True)
+            print(">>> Skip " + project + ": Missing labelled_filtered file.", flush=True)
             continue
         if not os.path.exists(ck_methods) or not os.path.exists(ck_classes):
-            print(">>> Skip " + project + ": Mancano i risultati in ck_analysis.", flush=True)
+            print(">>> Skip " + project + ": Missing results in ck_analysis.", flush=True)
             continue
             
         if os.path.exists(out_matches):
-            print(">>> Skip " + project + ": Gia' unito in precedenza.", flush=True)
+            print(">>> Skip " + project + ": Already merged previously.", flush=True)
             continue
 
         print("--- Merging CK Data: " + project + " ---", flush=True)
@@ -60,11 +63,11 @@ def run_all_mergers():
 
         try:
             subprocess.check_call(command)
-            print("OK: Merge completato per " + project, flush=True)
+            print("OK: Merge completed for " + project, flush=True)
         except subprocess.CalledProcessError:
-            print("ERRORE: ck_merger.py ha fallito per " + project, flush=True)
+            print("ERROR: ck_merger.py failed for " + project, flush=True)
         except Exception as e:
-            print("ERRORE su " + project + ": " + str(e), flush=True)
+            print("ERROR on " + project + ": " + str(e), flush=True)
         
         print("-" * 40, flush=True)
 

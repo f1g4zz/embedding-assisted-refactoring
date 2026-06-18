@@ -1,5 +1,8 @@
 def build_methods_features(df_methods):
-   
+    """
+    Strips whitespace from column names, selects target method metrics (Method, LOC, CC, PC),
+    renames them using a prefix to prevent conflicts, and returns a copy of the DataFrame.
+    """
     df_methods.columns = [c.strip() for c in df_methods.columns]
     
     

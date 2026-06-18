@@ -2,17 +2,17 @@ import pandas as pd
 import gc
 
 def merge_designite_features(df_methods_f, df_smells_f, df_classes_f):
-    # 1. Pulizia preventiva: rimuoviamo duplicati esatti che potrebbero appesantire il merge
+    # 1. Preventive cleanup: remove exact duplicates to optimize the merge
     df_methods_f = df_methods_f.drop_duplicates()
     df_smells_f = df_smells_f.drop_duplicates()
     df_classes_f = df_classes_f.drop_duplicates()
 
-    # 2. Identifichiamo le colonne comuni per il primo merge (Metodi + Smell)
+    # 2. Identify common columns for the first merge (Methods + Smells)
     common_cols_1 = list(set(df_methods_f.columns) & set(df_smells_f.columns))
     
-    # Usiamo 'left' invece di 'inner' se vuoi mantenere tutti i metodi anche senza smell,
-    # oppure restiamo su 'inner' ma con cautela. 
-    # Per progetti giganti, 'left' è spesso più prevedibile.
+    # We use 'inner' to keep only methods that are smelly, but using 'left' 
+    # instead of 'inner' is also possible if we want to keep all methods even without smells.
+    # For giant projects, 'left' is often more predictable.
     df_merged = pd.merge(
         df_methods_f, 
         df_smells_f, 
@@ -20,11 +20,11 @@ def merge_designite_features(df_methods_f, df_smells_f, df_classes_f):
         how='inner' 
     )
 
-    # Liberiamo memoria dai DataFrame che non servono più
+    # Free memory from DataFrames that are no longer needed
     del df_smells_f
     gc.collect()
 
-    # 3. Secondo merge (Risultato + Classi)
+    # 3. Second merge (Result + Classes)
     common_cols_2 = list(set(df_merged.columns) & set(df_classes_f.columns))
     
     df_final = pd.merge(
@@ -34,7 +34,7 @@ def merge_designite_features(df_methods_f, df_smells_f, df_classes_f):
         how='inner'
     )
 
-    # Pulizia finale
+    # Final cleanup
     del df_merged, df_classes_f
     gc.collect()
 

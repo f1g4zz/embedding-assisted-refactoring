@@ -6,7 +6,7 @@ from pathlib import Path
 
 def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv, output_tracking_csv):
     if not os.path.exists(designite_csv):
-        print(f"Error: File Designite not Found")
+        print(f"Error: Designite file not found.")
         return
 
     project_name = Path(designite_csv).stem
@@ -72,7 +72,7 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
         with open(ref_miner_json, 'r', encoding='utf-8') as f:
             history = json.load(f)
     except Exception as e:
-        print(f"Error JSON: {e}")
+        print(f"Error loading JSON: {e}")
         return
 
     matches = []
@@ -92,9 +92,12 @@ def analyze_with_live_tracking(designite_csv, ref_miner_json, output_matches_csv
     ]
 
     commits = history.get('commits', [])
+    # Commits are typically sorted from newest to oldest in RefactoringMiner output.
+    # Reversing them allows scanning forward chronologically (oldest to newest),
+    # which is necessary to dynamically track class renames/moves and update our path mapping.
     commits.reverse()
 
-    print(f"--- Analysing {len(active_smells_map)} files smelly and {len(commits)} commit ---")
+    print(f"--- Analyzing {len(active_smells_map)} smelly files and {len(commits)} commits ---")
 
     for i, commit in enumerate(commits, 1):
         sha = commit.get('commitId', commit.get('sha1', 'N/A'))
@@ -218,7 +221,8 @@ if __name__ == "__main__":
     parser.add_argument('--out_track', default='results/')
     args = parser.parse_args()
 
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    # Four parents up from project_thesis/src/core/miner.py to get DesigniteJava/
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     def resolve(p):
         path = Path(p)
         return path if path.is_absolute() else BASE_DIR / path

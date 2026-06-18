@@ -5,7 +5,6 @@ from pathlib import Path
 
 def main(input_path, output_path):
     try:
-        
         df = pd.read_csv(input_path)
         
         required_columns = {'class_name', 'refactoring'}
@@ -21,10 +20,10 @@ def main(input_path, output_path):
             types=lambda x: list(x.unique())
         ).reset_index()
 
-        class_analysis.columns = ['Classe', 'Numero Refactoring', 'Tipi di Refactoring']
-        class_analysis = class_analysis.sort_values(by='Numero Refactoring', ascending=False)
+        class_analysis.columns = ['Class', 'Refactoring Count', 'Refactoring Types']
+        class_analysis = class_analysis.sort_values(by='Refactoring Count', ascending=False)
         class_analysis.to_csv(output_path, index=False)
-        print(f"Analysis completed. Risults saved in: {output_path}")
+        print(f"Analysis completed. Results saved in: {output_path}")
 
         print("\nFirst 10 rows:")
         print(class_analysis.head(10))
@@ -35,13 +34,14 @@ def main(input_path, output_path):
         print(f"Error: {e}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Analysis of refactoring by class and CSVfile .")
+    parser = argparse.ArgumentParser(description="Analysis of refactoring by class and CSV file.")
     parser.add_argument('-i', '--input', required=True, help="path of CSV file for input")
     parser.add_argument('-o', '--output', required=True, help="path of CSV file for output")
 
     args = parser.parse_args()
     
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    # Four parents up from project_thesis/src/utils/counter.py to get DesigniteJava/
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     
     def resolve_path(p):
         path = Path(p)

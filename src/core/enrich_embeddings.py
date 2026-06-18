@@ -1,3 +1,7 @@
+"""
+Fuzzy merges the main dataset with method embeddings using normalized class names 
+and proximity of line numbers (+/- 5 lines tolerance).
+"""
 import pandas as pd
 import argparse
 import sys
@@ -16,7 +20,7 @@ def ultra_normalize(text):
     return t
 
 def enrich_dataset(main_path, methods_path, metadata_path, output_path):
-    print_progress("Caricamento file...")
+    print_progress("Loading file...")
 
     df_methods = pd.read_csv(methods_path, sep='\s+', header=None)
     emb_cols = [f'emb_{i}' for i in range(len(df_methods.columns) - 1)]
@@ -29,7 +33,7 @@ def enrich_dataset(main_path, methods_path, metadata_path, output_path):
 
     methods_enriched = pd.merge(df_methods, df_metadata, on='ID')
 
-    print_progress("Normalizzazione e preparazione al matching tollerante (±5 righe)...")
+    print_progress("Normalization of path, matching on ±5 rows...")
     df_main['match_key'] = (df_main['Package'].astype(str) + df_main['Class'].astype(str)).apply(ultra_normalize)
     methods_enriched['match_key'] = methods_enriched['meta_raw_class'].apply(ultra_normalize)
 
@@ -45,6 +49,9 @@ def enrich_dataset(main_path, methods_path, metadata_path, output_path):
     df_main = df_main.sort_values('line_num')
     methods_enriched = methods_enriched.sort_values('line_num')
 
+    # Perform an asynchronous fuzzy merge (merge_asof) to align lines from the two datasets
+    # based on the nearest line number (direction='nearest') within a tolerance of +/- 5 lines,
+    # grouped by the normalized match_key (class name).
     df_final = pd.merge_asof(
         df_main,
         methods_enriched,
@@ -59,16 +66,16 @@ def enrich_dataset(main_path, methods_path, metadata_path, output_path):
     df_final = df_final.drop(columns=[c for c in cols_to_drop if c in df_final.columns])
 
     print("\n" + "="*60)
-    print(f"{'REPORT MATCHING (FUZZY ±3)':^60}")
+    print(f"{'MATCHING REPORT (FUZZY ±5)':^60}")
     print("-" * 60)
     matches = df_final[emb_cols[0]].notna().sum()
-    print(f"Righe totali: {len(df_main)}")
-    print(f"Match trovati: {matches} ({(matches/len(df_main))*100:.2f}%)")
+    print(f"Total Rows: {len(df_main)}")
+    print(f"Total Matches: {matches} ({(matches/len(df_main))*100:.2f}%)")
     print("="*60 + "\n")
 
-    print_progress(f"Salvataggio in: {output_path}")
+    print_progress(f"Saving in: {output_path}")
     df_final.to_csv(output_path, index=False)
-    print_progress("Completato!")
+    print_progress("Completed!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -81,9 +88,8 @@ if __name__ == "__main__":
     try:
         enrich_dataset(args.main, args.methods, args.metadata, args.output)
     except Exception as e:
-        print(f"\n[ERRORE] {e}")
+        print(f"\n[ERROR] {e}")
         
         if "Permission denied" in str(e):
-            print("SUGGERIMENTO: Verifica che l'output sia un PERCORSO FILE (es. D:\\out.csv) e non una CARTELLA.")
-            print("Verifica anche che il file non sia aperto in Excel.")
+            print("Check Output Path")
         sys.exit(1)

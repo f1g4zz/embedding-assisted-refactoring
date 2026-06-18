@@ -2,9 +2,12 @@ import subprocess
 import os
 import sys
 
-SRC_PATH = r"D:\papersEvolution\DesigniteJava\project_thesis\src"
+# Resolve DesigniteJava root and src root dynamically
+project_thesis_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-ANALYSES_PATH = r"D:\papersEvolution\DesigniteJava\analyses"
+SRC_PATH = os.path.join(project_thesis_src_path, "core")
+ANALYSES_PATH = os.path.join(BASE_PATH, "analyses")
 
 projects = [
     "ceylon-compiler", "payara", "shardingsphere", "freeplane", "triplea", 

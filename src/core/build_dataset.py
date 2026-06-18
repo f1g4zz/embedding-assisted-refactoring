@@ -9,6 +9,9 @@ import sys
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
+# Add parent directory of core/ (which is src/) to sys.path to resolve utils imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from utils.load_data import load_designite_csvs
 from utils.features_methods import build_methods_features
 from utils.features_smells import build_smell_features
@@ -28,12 +31,15 @@ def extract_method_by_line(file_path, method_name, line_no):
         start_idx = max(0, int(line_no) - 1)
         content_from_line = "".join(lines[start_idx:])
         
+        # Regex pattern to match the method signature starting from method_name:
+        # Matches: method name + parameters in parentheses + optional throws clause + opening brace
         pattern = re.escape(method_name.strip()) + r"\s{0,}\([^)]{0,}\)\s{0,}(?:throws\s+[\w\s,]+)?\s{0,}\{"
         
         match = re.search(pattern, content_from_line)
         if match:
             brace_start_in_fragment = content_from_line.find('{', match.start())
             
+            # Simple brace-counting parser to extract the entire method block
             brace_count = 1
             for i in range(brace_start_in_fragment + 1, len(content_from_line)):
                 if content_from_line[i] == '{':
@@ -61,13 +67,14 @@ def get_codebert_embedding(text, tokenizer, model, device):
 # ===================== MAIN PIPELINE =====================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pipeline Designite-CodeBERT con Line Mapping")
-    parser.add_argument("--project", type=str, required=True, help="Percorso del progetto")
-    parser.add_argument("--output", type=str, required=True, help="Percorso del file CSV di output")
-    parser.add_argument("--no-embeddings", action="store_true", help="Salta la generazione degli embedding CodeBERT")
+    parser = argparse.ArgumentParser(description="Designite-CodeBERT Pipeline with Line Mapping")
+    parser.add_argument("--project", type=str, required=True, help="Path to the project")
+    parser.add_argument("--output", type=str, required=True, help="Path to the output CSV file")
+    parser.add_argument("--no-embeddings", action="store_true", help="Skip CodeBERT embeddings generation")
     args = parser.parse_args()
 
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    # Four parents up from project_thesis/src/core/build_dataset.py to get DesigniteJava/
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     
     PROJECT_ROOT = Path(args.project).resolve() if os.path.isabs(args.project) else (BASE_DIR / args.project).resolve()
     OUTPUT = Path(args.output).resolve() if os.path.isabs(args.output) else (BASE_DIR / args.output).resolve()
@@ -113,6 +120,8 @@ if __name__ == "__main__":
     if not args.no_embeddings:
         print("Scanning Java files for embeddings...")
         disk_files_map = {}
+        # Map Java files by different keys (relative path components, absolute path, file name)
+        # to ensure robust matching even when paths in the Designite output don't exactly match local files.
         for path in PROJECT_ROOT.rglob("*.java"):
             full_path = str(path.resolve())
             norm_path = full_path.replace("\\", "/").lower()
@@ -142,6 +151,7 @@ if __name__ == "__main__":
             parts = path_norm.split('/')
             key_3 = "/".join(parts[-3:]) if len(parts) >= 3 else "none"
             
+            # Resolve path using the mapping dictionary populated above
             if Path(raw_path).exists(): real_path = raw_path
             elif key_3 in disk_files_map: real_path = disk_files_map[key_3]
             elif path_norm in disk_files_map: real_path = disk_files_map[path_norm]

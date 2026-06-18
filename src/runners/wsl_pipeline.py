@@ -6,8 +6,19 @@ import glob
 import shutil
 import numpy as np
 
-SOURCE_ROOT = "/mnt/d/papersEvolution/DesigniteJava/projects"
-OUTPUT_BASE = "/mnt/d/papersEvolution/DesigniteJava/projects_output"
+# Resolve BASE_PATH dynamically (3 parents up from project_thesis/src/runners/wsl_pipeline.py to get DesigniteJava/)
+windows_base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+# Convert Windows path (e.g. "D:\papersEvolution\DesigniteJava") to WSL format (e.g. "/mnt/d/papersEvolution/DesigniteJava")
+wsl_path = windows_base_path.replace("\\", "/")
+if ":" in wsl_path:
+    drive, path_part = wsl_path.split(":", 1)
+    wsl_base_path = f"/mnt/{drive.lower()}{path_part}"
+else:
+    wsl_base_path = wsl_path
+
+SOURCE_ROOT = os.path.join(wsl_base_path, "projects")
+OUTPUT_BASE = os.path.join(wsl_base_path, "projects_output")
 LOG_FILE = os.path.join(OUTPUT_BASE, "detailed_pipeline.log")
 LINE_BIN = "./line"
 EMB_SIZE = "64"
@@ -87,7 +98,7 @@ for i, p_name in enumerate(PROJECTS, 1):
         if os.path.exists(emb_final) and os.path.getsize(emb_final) > 0:
             continue
 
-        print(f"\n[{i}/{len(PROJECTS)}] >>> ANALISI: {sub_id} <<<", flush=True)
+        print(f"\n[{i}/{len(PROJECTS)}] >>> ANALYSIS: {sub_id} <<<", flush=True)
         
         cpg_out = os.path.join(OUTPUT_BASE, "cpgs", f"{sub_id}.bin")
         dot_out = os.path.join(OUTPUT_BASE, "dots", sub_id)
@@ -100,7 +111,7 @@ for i, p_name in enumerate(PROJECTS, 1):
             my_env["JAVA_OPTS"] = "-Xmx5G -XX:+UseG1GC -XX:MaxGCPauseMillis=500 -Djoern.java.no_full_resolver=true"
 
             if os.path.exists(edg_out) and os.path.exists(met_out):
-                print(f"  [>>>] Dati intermedi trovati. Salto a LiNE...", flush=True)
+                print(f"  [>>>] Intermediate data found. Jumping to LiNE...", flush=True)
                 edge_count = sum(1 for _ in open(edg_out))
             else:
                 if os.path.exists(cpg_out): os.remove(cpg_out)
@@ -111,9 +122,9 @@ for i, p_name in enumerate(PROJECTS, 1):
                 print(f" [2/4] Export CFG...", end="", flush=True)
                 subprocess.run(["joern-export", cpg_out, "--repr", "cfg", "--out", dot_out], env=my_env, check=True, capture_output=True)
                 dot_files = glob.glob(os.path.join(dot_out, "**/*.dot"), recursive=True)
-                print(f" OK ({len(dot_files)} file)", flush=True)
+                print(f" OK ({len(dot_files)} files)", flush=True)
 
-                print(f"  [3/4] Metadati Rich...", end="", flush=True)
+                print(f"  [3/4] Rich Metadata...", end="", flush=True)
                 scala = f'import io.shiftleft.semanticcpg.language._\nimportCpg("{cpg_out}")\nval writer = new java.io.PrintWriter("{met_out}")\ncpg.method.filter(_.lineNumber.isDefined).foreach {{ m => val nodeIds = m.ast.id.l.mkString(",")\nval fullClassName = m.typeDecl.fullName.headOption.getOrElse("NoClass")\nwriter.println(s"${{m.id}}|${{m.name}}|${{fullClassName}}|${{m.lineNumber.get}}|${{m.filename}}|${{nodeIds}}") }}\nwriter.close()'
                 tmp_sc = f"tmp_{sub_id}.sc"
                 with open(tmp_sc, "w") as f_sc: f_sc.write(scala)
@@ -121,7 +132,7 @@ for i, p_name in enumerate(PROJECTS, 1):
                 if os.path.exists(tmp_sc): os.remove(tmp_sc)
                 print(" OK.", flush=True)
 
-                print(f"  [4/4] Conversione Archi (Turbo)...", end="", flush=True)
+                print(f"  [4/4] Edge Conversion (Turbo)...", end="", flush=True)
                 edge_count = 0
                 with open(edg_out, "w") as out_f:
                     for d_file in dot_files:
@@ -135,7 +146,7 @@ for i, p_name in enumerate(PROJECTS, 1):
                                         if s.isdigit() and d.isdigit():
                                             out_f.write(f"{s} {d} 1\n"); edge_count += 1
                         except: continue
-                print(f" OK ({edge_count} archi)", flush=True)
+                print(f" OK ({edge_count} edges)", flush=True)
 
             if edge_count > 0:
                 print(f"  [5] LiNE & Pooling...", end="", flush=True)

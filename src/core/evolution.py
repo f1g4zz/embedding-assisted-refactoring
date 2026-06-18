@@ -61,6 +61,11 @@ def analyze_evolution(before_file, after_file, refminer_json, output_file):
     
     existing_keys_after = set(df_after['method_key'].tolist())
     
+    # Identify resolved and persisted code smells:
+    # 1. A method smell has 'persisted' if it is still smelly in the 'after' snapshot, or 
+    #    if it was refactored (renamed, moved, etc.) and its new signature is still smelly.
+    # 2. A method smell is 'resolved' if it no longer exists in the 'after' snapshot and 
+    #    has not been tracked to a smelly destination.
     resolved = [] 
     persisted = [] 
 
@@ -88,21 +93,22 @@ def analyze_evolution(before_file, after_file, refminer_json, output_file):
     
     pd.DataFrame(resolved).to_csv(output_file, index=False)
 
-    print(f"Analisi completed.")
+    print(f"Analysis completed.")
     print(f"- Persisted smells: {len(persisted)}")
     print(f"- Solved smells (resulting rows): {len(resolved)}")
     print(f"File saved in: {output_file}")
     
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Analisi evolutiva del debito tecnico.")
-    parser.add_argument('--before', required=True, help="File CSV snapshot initial")
-    parser.add_argument('--after', required=True, help="File CSV snapshot final")
-    parser.add_argument('--refminer', required=True, help="File JSON from RefactoringMiner")
-    parser.add_argument('--output', required=True, help="File CSV for output")
+    parser = argparse.ArgumentParser(description="Evolutionary analysis of technical debt.")
+    parser.add_argument('--before', required=True, help="Initial CSV snapshot file")
+    parser.add_argument('--after', required=True, help="Final CSV snapshot file")
+    parser.add_argument('--refminer', required=True, help="JSON file from RefactoringMiner")
+    parser.add_argument('--output', required=True, help="Output CSV file")
     
     args = parser.parse_args()
 
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    # Four parents up from project_thesis/src/core/evolution.py to get DesigniteJava/
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     
     def resolve(p):
         path = Path(p)

@@ -1,3 +1,7 @@
+"""
+Batch execution script to run the machine learning pipeline (pipeline.py)
+sequentially across all ten target refactoring types.
+"""
 import subprocess
 import sys
 
@@ -28,7 +32,7 @@ for i, target in enumerate(targets, 1):
         subprocess.run(command, check=True)
         print(f"\n[SUCCESS] {target} completed.\n")
     except subprocess.CalledProcessError as e:
-        print(f"\n[ERROR] Execution failed for '{target}'error code: {e.returncode}.\n")
+        print(f"\n[ERROR] Execution failed for '{target}' error code: {e.returncode}.\n")
 
 
-print("Script succesfully terminated!")
+print("Script successfully terminated!")

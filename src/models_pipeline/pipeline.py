@@ -10,7 +10,8 @@ import argparse
 
 matplotlib.use('Agg') 
 
-from sklearn.metrics import classification_report, roc_curve, auc
+from sklearn.metrics import classification_report, roc_curve, auc, brier_score_loss, log_loss
+from sklearn.calibration import calibration_curve
 from sklearn.model_selection import GroupShuffleSplit, RandomizedSearchCV, GroupKFold, KFold
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
@@ -54,17 +55,17 @@ def save_and_print_report(y_true, y_pred, model_name):
 # 0. SETUP
 # ==========================================
 
-parser = argparse.ArgumentParser(description="Script per la classificazione dei Refactoring.")
+parser = argparse.ArgumentParser(description="Script for classifying Refactoring techniques.")
 parser.add_argument(
     '--target', '-t', 
     type=str, 
     default="Change Parameter Type",
-    help='Il nome del refactoring target (es. "Extract Method"). Default: "Change Parameter Type"'
+    help='Name of the refactoring target (e.g. "Extract Method"). Default: "Change Parameter Type"'
 )
 parser.add_argument(
     '--tune', 
     action='store_true', 
-    help='Se inserito, attiva il Keras Tuner. Altrimenti usa solo i modelli Hardcoded.'
+    help='If present, tuners will run (compute intensive)'
 )
 
 args = parser.parse_args()
@@ -91,26 +92,44 @@ open(os.path.join(output_dir, "all_classification_reports.txt"), "w").close()
 # 1. LOADING & CLEANING
 # ==========================================
 log_progress("[PROGRESS] Loading data...")
-df1 = pd.read_csv(r"D:\papersEvolution\DesigniteJava\embedded\dataset\dataset.csv")
-df2 = pd.read_csv(r"D:\papersEvolution\DesigniteJava\embedded\dataset\dataset_zeros.csv")
-df = pd.concat([df1, df2], axis=0).reset_index(drop=True)
+#df1 = pd.read_csv(r"D:\papersEvolution\DesigniteJava\embedded\dataset\dataset.csv")
+#df2 = pd.read_csv(r"D:\papersEvolution\DesigniteJava\embedded\dataset\dataset_zeros.csv")
+#df = pd.concat([df1, df2], axis=0).reset_index(drop=True)
+df = pd.read_csv(r"D:\papersEvolution\DesigniteJava\ck_graph2vec_merged\ck_graph2vec_merged_all.csv")
 
 df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 df = df.drop_duplicates().dropna().reset_index(drop=True)
 
+# --- Distribution of all refactoring targets ---
+
+log_progress("[PROGRESS] Generating overall targets distribution plot...")
+original_targets = ["Change Variable Type", "Change Parameter Type", "Change Return Type",
+                    "Extract Method", "Move Method", "Rename Method", "Rename Variable",
+                    "Rename Parameter", "Extract Variable", "Add Parameter"]
+
+plt.figure(figsize=(12, 6))
+existing_targets = [t for t in original_targets if t in df.columns]
+targets_counts = df[existing_targets].sum().sort_values(ascending=False)
+
+sns.barplot(x=targets_counts.values, y=targets_counts.index, palette="viridis")
+plt.title("Distribution of Refactoring Techniques (Full Cleaned Dataset)")
+plt.xlabel("Occurrences")
+plt.ylabel("Refactoring Technique")
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "all_targets_distribution.png"))
+plt.close()
+
 # ==========================================
 # 2. PRE-SPLIT FEATURE ENGINEERING
 # ==========================================
-target_originali = ["Change Variable Type", "Change Parameter Type", "Change Return Type",
-                    "Extract Method", "Move Method", "Rename Method", "Rename Variable",
-                    "Rename Parameter", "Extract Variable", "Add Parameter"]
+
 meta_cols = ['Method', 'Project', 'Package', 'Class', 'Description', 'File', 'line', 'Line no']
 
 if 'Smell' in df.columns:
     df['Smell_Density'] = df['Smell'].astype(str).apply(lambda x: 0 if x.lower() == 'none' else len(x.split(',')))
 
     groups = df['Project']
-initial_drop = [col for col in meta_cols + target_originali if col in df.columns and col not in ['Project', 'Smell']]
+initial_drop = [col for col in meta_cols + original_targets if col in df.columns and col not in ['Project', 'Smell']]
 X_temp = df.drop(columns=initial_drop)
 y_all = df[target_col]
 
@@ -144,8 +163,19 @@ if 'Smell' in X_tr_raw.columns:
     smell_train_raw_series = X_tr_raw['Smell'].copy()
     original_test_smells = X_te_raw['Smell'].copy()
 
+# --- Target distribution before balancing ---
+log_progress("[PROGRESS] Generating target distribution plot (BEFORE balancing)...")
+plt.figure(figsize=(6, 4))
+sns.countplot(x=y_tr_raw, palette="pastel")
+plt.title(f"Target Distribution Before Balancing\n({target_col})")
+plt.xlabel("Class (0 = Negative, 1 = Positive)")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "target_before_balancing.png"))
+plt.close()
+
 # ==========================================
-# 4. TARGET ENCODING (SMELL RISK SCORE)
+# 4. TARGET ENCODING (SMELL RISK SCORE\)
 # ==========================================
 if 'Smell' in X_tr_raw.columns:
     log_progress("[PROGRESS] Calculating Smell Risk Score (Target Encoding con Smoothing)...")
@@ -169,6 +199,43 @@ if 'Project' in X_tr_raw.columns:
 
 X_tr_final = X_tr_raw.select_dtypes(include=[np.number, bool]).astype(np.float32)
 X_te_final = X_te_raw.select_dtypes(include=[np.number, bool]).astype(np.float32)
+
+# --- Dataset Features Summary ---
+log_and_write_report("\n[PROGRESS] --- Dataset Features Summary (Post-Metadata & Encoding) ---")
+all_cols = X_tr_final.columns.tolist()
+emb_cols_summary = [c for c in all_cols if "dim_" in c]
+classic_cols_summary = [c for c in all_cols if "dim_" not in c]
+
+log_and_write_report(f"Total Features Active: {len(all_cols)}")
+log_and_write_report(f"Classic Features ({len(classic_cols_summary)}):")
+
+for col in classic_cols_summary:
+    log_and_write_report(f"  - {col}")
+
+if len(emb_cols_summary) > 0:
+    log_and_write_report(f"Embeddings Features: {len(emb_cols_summary)} columns (Represented as a single embedding block)")
+else:
+    log_and_write_report("Embeddings Features: None detected.")
+    
+log_and_write_report("-" * 75 + "\n")
+
+# --- Smell Risk Score per Smell Category ---
+log_progress("[PROGRESS] Generating Smell Risk Score per Smell Category plot...")
+plt.figure(figsize=(12, 6))
+
+sorted_smells = smoothed_means.sort_values(ascending=False)
+
+top_smells = sorted_smells.head(30)
+
+sns.barplot(x=top_smells.index, y=top_smells.values, palette="magma")
+plt.title(f"Smell Risk Score by Smell Combination\nTarget: {target_col}")
+plt.xlabel("Smell Combination")
+plt.ylabel("Computed Risk Score")
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "smell_risk_score_by_smell.png"))
+plt.close()
+
 
 # ==========================================
 # 5. MASTER SCALING & BALANCING (ACADEMIC SETTING)
@@ -199,6 +266,37 @@ X_test_s, y_test = smart_balance(X_te_all_s, y_te_raw)
 smell_train_balanced = smell_train_raw_series.loc[X_train_s.index]
 
 log_and_write_report(f"Balanced Train Set: {len(y_train)} | Balanced Test Set: {len(y_test)}")
+
+# --- Box plots before and after scaling ---
+log_progress("[PROGRESS] Generating box plots for scaling comparison...")
+cols_to_plot = X_tr_final.columns[:10] 
+
+fig, axes = plt.subplots(2, 1, figsize=(14, 12))
+
+# Before Scaling
+sns.boxplot(data=X_tr_final[cols_to_plot], ax=axes[0], orient="h", palette="Set2")
+axes[0].set_title("Feature Distributions BEFORE Scaling (Sample of 10 Features)")
+axes[0].set_xlabel("Original Values")
+
+# After Scaling
+sns.boxplot(data=X_tr_all_s[cols_to_plot], ax=axes[1], orient="h", palette="Set2")
+axes[1].set_title("Feature Distributions AFTER Scaling (Sample of 10 Features)")
+axes[1].set_xlabel("Scaled Values (Standardized)")
+
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "boxplots_scaling_comparison.png"))
+plt.close()
+
+# --- Target distribution after balancing ---
+log_progress("[PROGRESS] Generating target distribution plot (AFTER balancing)...")
+plt.figure(figsize=(6, 4))
+sns.countplot(x=y_train, palette="pastel")
+plt.title(f"Target Distribution After Balancing\n({target_col})")
+plt.xlabel("Class (0 = Negative, 1 = Positive)")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "target_after_balancing.png"))
+plt.close()
 
 # ==========================================
 # 6. HYPERPARAMETER TUNING (XGBoost)
@@ -304,8 +402,8 @@ log_and_write_report("\n[DEBUG] --- Weight Autopsy of the Full Network ---")
 input_weights = nn_baseline.layers[0].get_weights()[0]
 feature_strength = np.sum(np.abs(input_weights), axis=1)
 
-emb_cols = [c for c in X_train_s.columns if "emb_" in c]
-classic_cols = [c for c in X_train_s.columns if "emb_" not in c]
+emb_cols = [c for c in X_train_s.columns if "dim_" in c]
+classic_cols = [c for c in X_train_s.columns if "dim_" not in c]
 
 idx_emb = [X_train_s.columns.get_loc(c) for c in emb_cols]
 idx_classic = [X_train_s.columns.get_loc(c) for c in classic_cols]
@@ -372,6 +470,15 @@ if RUN_NN_TUNING:
         callbacks=[early_stop_tuner], 
         verbose=0
     )
+
+best_hps_targeted = {
+    'units_l1': 16,
+    'units_l2': 8,
+    'dropout_l1': 0.4,
+    'dropout_l2': 0.2,
+    'learning_rate': 1e-3,
+    'l2_reg': 0.01
+}
 
 try:
     best_hps_targeted = tuner.get_best_hyperparameters(num_trials=1)[0]
@@ -662,6 +769,133 @@ results_proba["XGB_WITH_PCA_EMB"] = xgb_pca.predict_proba(X_te_pca_combined)[:, 
 save_and_print_report(y_test, (results_proba["XGB_WITH_PCA_EMB"] > 0.5).astype(int), "XGB_WITH_PCA_EMB")
 
 # ==========================================
+# 8.8 SELF-SUPERVISE LEARNING
+# ==========================================
+log_and_write_report("\n" + "="*60 + "\n SELF-SUPERVISED LEARNING (SSL)\n" + "="*60)
+
+# --- DATA PREPARATION ---
+indices_ft = y_train.index
+X_ssl_raw_pool = X_tr_final.drop(index=indices_ft, errors='ignore')
+
+
+ssl_scaler = StandardScaler()
+X_ssl_pool_scaled = pd.DataFrame(
+    ssl_scaler.fit_transform(X_ssl_raw_pool), 
+    columns=X_ssl_raw_pool.columns
+)
+
+
+input_dim = X_ssl_pool_scaled.shape[1]
+encoding_dim = 64
+
+# --- PRE-TASK ARCHTECTURES ---
+
+# A. Autoencoder
+def build_autoencoder(dim, latent_dim):
+    input_layer = layers.Input(shape=(dim,))
+    # Larger layers to handle the embeddings
+    enc = layers.Dense(64, activation='relu')(input_layer) 
+    bottleneck = layers.Dense(latent_dim, activation='relu', name='encoder_output')(enc)
+    dec = layers.Dense(64, activation='relu')(bottleneck)
+    out = layers.Dense(dim, activation='linear')(dec)
+    
+    ae = models.Model(input_layer, out)
+    encoder = models.Model(input_layer, bottleneck)
+    ae.compile(optimizer='adam', loss='mse')
+    return ae, encoder
+
+# B. Contrastive Model
+class ContrastiveModel(models.Model):
+    def __init__(self, encoder):
+        super().__init__()
+        self.encoder = encoder
+        self.noise_factor = 0.1
+
+    def train_step(self, data):
+        x = data[0] if isinstance(data, tuple) else data
+        x1 = x + self.noise_factor * tf.random.normal(shape=tf.shape(x))
+        x2 = x + self.noise_factor * tf.random.normal(shape=tf.shape(x))
+        
+        with tf.GradientTape() as tape:
+            z1 = self.encoder(x1)
+            z2 = self.encoder(x2)
+            loss = tf.reduce_mean(tf.square(z1 - z2)) 
+        
+        gradients = tape.gradient(loss, self.encoder.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.encoder.trainable_variables))
+        return {"contrastive_loss": loss}
+
+# --- 3.  PRE-TASK EXECUTION---
+log_progress("[SSL] Executing Pre-task: Training Autoencoder...")
+ae_full, encoder_ae = build_autoencoder(input_dim, encoding_dim)
+ae_full.fit(X_ssl_pool_scaled.values, X_ssl_pool_scaled.values, epochs=30, batch_size=64, validation_split=0.1, verbose=0)
+log_progress("[SSL] Executing Pre-task: Training Contrastive Encoder...")
+contrastive_base = models.Sequential([
+    layers.Input(shape=(input_dim,)),
+    layers.Dense(64, activation='relu'),
+    layers.Dense(encoding_dim, activation='linear')
+])
+c_model = ContrastiveModel(contrastive_base)
+c_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3))
+c_model.fit(X_ssl_pool_scaled.values, epochs=25, batch_size=64, verbose=0)
+
+
+# --- 4. FINE-TUNING ---
+
+def fine_tune_with_warmup(base_encoder, name, hps):
+    
+    
+    units_l1 = hps.get('units_l1')
+    units_l2 = hps.get('units_l2')
+    drop_l1 = hps.get('dropout_l1')
+    drop_l2 = hps.get('dropout_l2')
+    
+    base_encoder.trainable = False 
+    model = models.Sequential([
+        base_encoder, 
+        
+        layers.Dense(units_l1, activation='relu'),
+        layers.Dropout(drop_l1),
+        layers.Dense(units_l2, activation='relu'),
+        layers.Dropout(drop_l2),
+        layers.Dense(1, activation='sigmoid')
+    ])
+    
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), 
+                  loss='binary_crossentropy', 
+                  metrics=['accuracy', CorrectF1Metric()])
+    
+    log_progress(f" -> Phase 1: Warm-up")
+    model.fit(X_train_s.values, y_train.values, epochs=10, batch_size=16, validation_split=0.15, verbose=0)
+    
+    base_encoder.trainable = True
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=5e-5), 
+                  loss='binary_crossentropy', 
+                  metrics=['accuracy', CorrectF1Metric()])
+    
+    log_progress(f" -> Phase 2: unfreezing wheights and Fine-Tuning end-to-end...")
+    early_stop_ft = callbacks.EarlyStopping(monitor='val_f1_metric', mode='max', patience=12, restore_best_weights=True)
+    
+    model.fit(X_train_s.values, y_train.values, epochs=50, batch_size=16, validation_split=0.15, 
+          callbacks=[early_stop_ft, progress_tracker], verbose=0)
+    
+    return model
+
+ft_ae_nn = fine_tune_with_warmup(encoder_ae, "Autoencoder", best_hps_targeted)
+ft_cont_nn = fine_tune_with_warmup(contrastive_base, "Contrastive", best_hps_targeted)
+
+probs_ssl_ae = ft_ae_nn.predict(X_test_s, verbose=0).ravel()
+probs_ssl_cont = ft_cont_nn.predict(X_test_s, verbose=0).ravel()
+
+results_proba["SSL_AUTOENCODER_FT"] = probs_ssl_ae
+results_proba["SSL_CONTRASTIVE_FT"] = probs_ssl_cont
+
+save_and_print_report(y_test, (probs_ssl_ae > 0.5).astype(int), "SSL_AUTOENCODER_FT")
+save_and_print_report(y_test, (probs_ssl_cont > 0.5).astype(int), "SSL_CONTRASTIVE_FT")
+
+
+# ==========================================
 # 9. PLOTS GENERATION
 # ==========================================
 log_progress("\n--- Generating Plots ---")
@@ -671,7 +905,7 @@ log_progress("[PROGRESS] Computing Feature Importance for Standard XGBoost...")
 xgb_standard = models_map["XGBOOST"]
 if hasattr(xgb_standard, 'feature_importances_'):
     importances_xgb = xgb_standard.feature_importances_
-    # Selezioniamo le top 20 features per evitare grafici illeggibili
+    # Select the top 20 features to avoid unreadable plots
     top_n = min(20, len(importances_xgb))
     indices_xgb = np.argsort(importances_xgb)[::-1][:top_n]
     
@@ -690,6 +924,75 @@ plt.plot([0,1],[0,1], 'k--')
 plt.legend()
 plt.savefig(os.path.join(output_dir, "roc_comparison.png"))
 plt.close()
+
+# Calibration Curves & Metrics
+log_progress("[PROGRESS] Generating Calibration Curves & Computing Calibration Metrics...")
+
+log_and_write_report("\n" + "="*60)
+log_and_write_report(" CALIBRATION METRICS (Log Loss & Brier Score)")
+log_and_write_report("="*60)
+log_and_write_report(f"{'MODEL':<25} | {'LOG LOSS':<10} | {'BRIER SCORE':<12}")
+log_and_write_report("-" * 55)
+
+for name, proba in results_proba.items():
+    loss_ll = log_loss(y_test, proba)
+    loss_bs = brier_score_loss(y_test, proba)
+    log_and_write_report(f"{name:<25} | {loss_ll:.4f}     | {loss_bs:.4f}")
+
+log_and_write_report("-" * 55 + "\n")
+
+# Plot 1: XGBoost Comparison (Standard vs Ablated)
+log_progress("[PROGRESS] Generating Calibration Curve: XGBoost vs XGB_ABLATED...")
+plt.figure(figsize=(8, 6))
+plt.plot([0, 1], [0, 1], "k:", label="Perfect Calibration")
+
+xgb_models = ["XGBOOST", "XGB_ABLATED"]
+for name in xgb_models:
+    if name in results_proba:
+        proba = results_proba[name]
+        loss_ll = log_loss(y_test, proba)
+        loss_bs = brier_score_loss(y_test, proba)
+        prob_true, prob_pred = calibration_curve(y_test, proba, n_bins=10)
+        plt.plot(prob_pred, prob_true, "s-", label=f"{name} (Brier={loss_bs:.3f}, LL={loss_ll:.3f})")
+
+plt.ylabel("Fraction of positives")
+plt.xlabel("Mean predicted probability")
+plt.ylim([-0.05, 1.05])
+plt.legend(loc="lower right")
+plt.title(f"XGBoost Calibration Comparison - Target: {target_col}")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "calibration_xgb_comparison.png"))
+plt.close()
+
+# Plot 2: Neural Network Comparison (Target vs Ablated)
+log_progress("[PROGRESS] Generating Calibration Curve: NN Target vs NN Ablated...")
+plt.figure(figsize=(8, 6))
+plt.plot([0, 1], [0, 1], "k:", label="Perfect Calibration")
+
+nn_target_name = "NN_TUNED_TARGETED" if "NN_TUNED_TARGETED" in results_proba else "NN_BASELINE"
+nn_ablated_name = "NN_TUNED_ABLATED" if "NN_TUNED_ABLATED" in results_proba else "NN_ABLATED"
+
+nn_models = [nn_target_name, nn_ablated_name]
+for name in nn_models:
+    if name in results_proba:
+        proba = results_proba[name]
+        loss_ll = log_loss(y_test, proba)
+        loss_bs = brier_score_loss(y_test, proba)
+        prob_true, prob_pred = calibration_curve(y_test, proba, n_bins=10)
+        plt.plot(prob_pred, prob_true, "s-", label=f"{name} (Brier={loss_bs:.3f}, LL={loss_ll:.3f})")
+
+plt.ylabel("Fraction of positives")
+plt.xlabel("Mean predicted probability")
+plt.ylim([-0.05, 1.05])
+plt.legend(loc="lower right")
+plt.title(f"Neural Network Calibration Comparison - Target: {target_col}")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "calibration_nn_comparison.png"))
+plt.close()
+
+
 
 # Learning Curves F1
 plt.figure(figsize=(12, 7))
@@ -742,7 +1045,7 @@ try:
 
     importanza_emb, importanza_classica = 0.0, 0.0
     for i, col_name in enumerate(X_train_s.columns):
-        if "emb_" in str(col_name):
+        if "dim_" in str(col_name):
             importanza_emb += float(fi_matrix[i])
         else:
             importanza_classica += float(fi_matrix[i])
