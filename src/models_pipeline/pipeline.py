@@ -74,7 +74,10 @@ target_col = args.target
 RUN_NN_TUNING = args.tune
 
 
-base_report_dir = r"D:\papersEvolution\DesigniteJava\classification_report"
+# Resolve DesigniteJava root dynamically (3 parents up from project_thesis/src/models_pipeline/pipeline.py to get DesigniteJava/)
+BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+base_report_dir = os.path.join(BASE_PATH, "classification_report")
 output_dir = os.path.join(base_report_dir, target_col.replace(" ", "_"))
 os.makedirs(output_dir, exist_ok=True)
 report_file = os.path.join(output_dir, "all_classification_reports.txt")
@@ -92,10 +95,10 @@ open(os.path.join(output_dir, "all_classification_reports.txt"), "w").close()
 # 1. LOADING & CLEANING
 # ==========================================
 log_progress("[PROGRESS] Loading data...")
-#df1 = pd.read_csv(r"D:\papersEvolution\DesigniteJava\embedded\dataset\dataset.csv")
-#df2 = pd.read_csv(r"D:\papersEvolution\DesigniteJava\embedded\dataset\dataset_zeros.csv")
-#df = pd.concat([df1, df2], axis=0).reset_index(drop=True)
-df = pd.read_csv(r"D:\papersEvolution\DesigniteJava\ck_graph2vec_merged\ck_graph2vec_merged_all.csv")
+df1 = pd.read_csv(os.path.join(BASE_PATH, "embedded", "dataset", "dataset.csv"))
+df2 = pd.read_csv(os.path.join(BASE_PATH, "embedded", "dataset", "dataset_zeros.csv"))
+df = pd.concat([df1, df2], axis=0).reset_index(drop=True)
+#df = pd.read_csv(os.path.join(BASE_PATH, "ck_graph2vec_merged", "ck_graph2vec_merged_all.csv"))
 
 df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 df = df.drop_duplicates().dropna().reset_index(drop=True)
@@ -203,8 +206,8 @@ X_te_final = X_te_raw.select_dtypes(include=[np.number, bool]).astype(np.float32
 # --- Dataset Features Summary ---
 log_and_write_report("\n[PROGRESS] --- Dataset Features Summary (Post-Metadata & Encoding) ---")
 all_cols = X_tr_final.columns.tolist()
-emb_cols_summary = [c for c in all_cols if "dim_" in c]
-classic_cols_summary = [c for c in all_cols if "dim_" not in c]
+emb_cols_summary = [c for c in all_cols if "emb_" in c]
+classic_cols_summary = [c for c in all_cols if "emb_" not in c]
 
 log_and_write_report(f"Total Features Active: {len(all_cols)}")
 log_and_write_report(f"Classic Features ({len(classic_cols_summary)}):")
@@ -402,8 +405,8 @@ log_and_write_report("\n[DEBUG] --- Weight Autopsy of the Full Network ---")
 input_weights = nn_baseline.layers[0].get_weights()[0]
 feature_strength = np.sum(np.abs(input_weights), axis=1)
 
-emb_cols = [c for c in X_train_s.columns if "dim_" in c]
-classic_cols = [c for c in X_train_s.columns if "dim_" not in c]
+emb_cols = [c for c in X_train_s.columns if "emb_" in c]
+classic_cols = [c for c in X_train_s.columns if "emb_" not in c]
 
 idx_emb = [X_train_s.columns.get_loc(c) for c in emb_cols]
 idx_classic = [X_train_s.columns.get_loc(c) for c in classic_cols]
@@ -917,9 +920,11 @@ if hasattr(xgb_standard, 'feature_importances_'):
     plt.savefig(os.path.join(output_dir, "feature_importance_xgb.png"))
     plt.close()
 plt.figure(figsize=(8,6))
+allowed_roc_models = ["XGBOOST", "SVM", "LOG_REG", "NN_TUNED_TARGETED"]
 for name, proba in results_proba.items():
-    fpr, tpr, _ = roc_curve(y_test, proba)
-    plt.plot(fpr, tpr, label=f"{name} (AUC={auc(fpr, tpr):.2f})")
+    if name in allowed_roc_models:
+        fpr, tpr, _ = roc_curve(y_test, proba)
+        plt.plot(fpr, tpr, label=f"{name} (AUC={auc(fpr, tpr):.2f})")
 plt.plot([0,1],[0,1], 'k--')
 plt.legend()
 plt.savefig(os.path.join(output_dir, "roc_comparison.png"))
@@ -1045,7 +1050,7 @@ try:
 
     importanza_emb, importanza_classica = 0.0, 0.0
     for i, col_name in enumerate(X_train_s.columns):
-        if "dim_" in str(col_name):
+        if "emb_" in str(col_name):
             importanza_emb += float(fi_matrix[i])
         else:
             importanza_classica += float(fi_matrix[i])

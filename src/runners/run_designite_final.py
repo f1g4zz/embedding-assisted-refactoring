@@ -2,9 +2,12 @@ import os
 import subprocess
 import sys
 
-BASE_DIR = "/home/a.lanza-thesis/progetti_tesi"
-JAVA_BIN = "/home/a.lanza-thesis/.conda/envs/designite_env/bin/java"
-JAR_PATH = "/home/a.lanza-thesis/bin/DesigniteJava/DesigniteJava.jar"
+# Resolve user home directory dynamically
+HOME = os.path.expanduser("~")
+
+BASE_DIR = os.path.join(HOME, "progetti_tesi")
+JAVA_BIN = os.path.join(HOME, ".conda/envs/designite_env/bin/java")
+JAR_PATH = os.path.join(HOME, "bin", "DesigniteJava", "DesigniteJava.jar")
 SOURCE_ROOT = os.path.join(BASE_DIR, "dataset_full")
 OUTPUT_BASE = os.path.join(BASE_DIR, "designite_results")
 LOG_FILE = os.path.join(BASE_DIR, "pipeline_designite.log")
