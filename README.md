@@ -2,7 +2,7 @@
 
 This repository contains the replication package, referring to the Master's Thesis work: **"Integrating Structural and Semantic Analysis for Code Smell"** (Università degli Studi di Milano-Bicocca). 
 
-This project implements a machine learning pipeline that handles the entire lifecycle from data extraction and feature engineering to model training and evaluation.
+This project implements a Machine Learning pipeline that handles the entire lifecycle from data extraction and feature engineering to model training and evaluation.
 
 ---
 
@@ -18,6 +18,8 @@ To execute the entire data extraction and embedding pipeline, you must download 
     [Official Repository & Download](https://github.com/mauricioaniche/ck)
 * **Joern**: An open-source code analysis platform used in the Linux/WSL pipeline to parse source code into Control Flow Graphs (CFGs).  
     [Official Website & Installation](https://joern.io/)
+* **LINE**: Used to learn low-dimensional node embeddings from the Control Flow Graphs (CFGs) parsed by Joern.  
+    [Official Repository & Guidelines](https://github.com/tangjianpku/LINE)
 * **GraphCode2Vec**: Used downstream at the compiler intermediate representation layer to generate joint syntactic and semantic bytecode embeddings.  
     [Official Repository & Guidelines](https://github.com/vinhsuhi/GraphCode2Vec)
 
