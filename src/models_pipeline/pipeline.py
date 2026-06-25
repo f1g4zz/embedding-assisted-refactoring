@@ -206,8 +206,8 @@ X_te_final = X_te_raw.select_dtypes(include=[np.number, bool]).astype(np.float32
 # --- Dataset Features Summary ---
 log_and_write_report("\n[PROGRESS] --- Dataset Features Summary (Post-Metadata & Encoding) ---")
 all_cols = X_tr_final.columns.tolist()
-emb_cols_summary = [c for c in all_cols if "emb_" in c]
-classic_cols_summary = [c for c in all_cols if "emb_" not in c]
+emb_cols_summary = [c for c in all_cols if "emb_" in c or "dim_" in c]
+classic_cols_summary = [c for c in all_cols if "emb_" not in c and "dim_" not in c]
 
 log_and_write_report(f"Total Features Active: {len(all_cols)}")
 log_and_write_report(f"Classic Features ({len(classic_cols_summary)}):")
@@ -405,8 +405,8 @@ log_and_write_report("\n[DEBUG] --- Weight Autopsy of the Full Network ---")
 input_weights = nn_baseline.layers[0].get_weights()[0]
 feature_strength = np.sum(np.abs(input_weights), axis=1)
 
-emb_cols = [c for c in X_train_s.columns if "emb_" in c]
-classic_cols = [c for c in X_train_s.columns if "emb_" not in c]
+emb_cols = [c for c in X_train_s.columns if "emb_" in c or "dim_" in c]
+classic_cols = [c for c in X_train_s.columns if "emb_" not in c and "dim_" not in c]
 
 idx_emb = [X_train_s.columns.get_loc(c) for c in emb_cols]
 idx_classic = [X_train_s.columns.get_loc(c) for c in classic_cols]
@@ -1050,7 +1050,7 @@ try:
 
     importanza_emb, importanza_classica = 0.0, 0.0
     for i, col_name in enumerate(X_train_s.columns):
-        if "emb_" in str(col_name):
+        if "emb_" in str(col_name) or "dim_" in str(col_name):
             importanza_emb += float(fi_matrix[i])
         else:
             importanza_classica += float(fi_matrix[i])
